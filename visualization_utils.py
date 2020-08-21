@@ -136,7 +136,7 @@ class VisualizationUtils:
             else:
                 ae_predictions_train = []
                 for input_image, label in train_loader:
-                    inputs = input_image.view(input_image.shape[0], -1).to(params.device)
+                    inputs = input_image.to(params.device)
                     outputs = params.model(inputs)
                     loss = params.criterion(outputs, inputs).cpu().item()
 
@@ -154,7 +154,7 @@ class VisualizationUtils:
             else:
                 ae_predictions_test = []
                 for input_image, label in test_loader:
-                    inputs = input_image.view(input_image.shape[0], -1).to(params.device)
+                    inputs = input_image.to(params.device)
                     outputs = params.model(inputs)
                     loss = params.criterion(outputs, inputs).cpu().item()
 

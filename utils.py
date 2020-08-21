@@ -22,8 +22,8 @@ class Utils:
 
     @staticmethod
     def save_model_on_epoch_end(epoch, train_loss, val_loss, model, runtime_dir):
-        train_loss = str(round(train_loss, 2)).ljust(4, '0')
-        val_loss = str(round(val_loss, 2)).ljust(4, '0')
+        train_loss = str(round(train_loss, 4)).ljust(4, '0')
+        val_loss = str(round(val_loss, 4)).ljust(4, '0')
         epoch = str(epoch).zfill(3)
         torch.save(model, runtime_dir.joinpath('epoch{}_loss{}_valLoss{}.pt'.format(epoch, train_loss, val_loss)))
 

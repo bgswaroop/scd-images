@@ -78,9 +78,9 @@ class Data(object):
         dataset = self.load_data_by_name(dataset, config_mode)
         # Prepare for processing
         if config_mode == 'train':
-            return torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=8, pin_memory=True)
+            return torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True, num_workers=4)
         elif config_mode == 'test':
-            return torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=8)
+            return torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=False, num_workers=4)
 
     def load_data_for_visualization(self, dataset, config_mode):
         dataset = self.load_data_by_name(dataset, config_mode)

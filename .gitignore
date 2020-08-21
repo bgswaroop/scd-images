@@ -1,6 +1,5 @@
 /venv/
-/runtime_dir/
-/runtime_dir0/
+/runtime_dir*/
 /torch_dataset/
 /.idea/
 /__pycache__/

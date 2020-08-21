@@ -87,7 +87,9 @@ if __name__ == '__main__':
     from visualization_utils import VisualizationUtils
     from utils import Utils
 
-    # run_flow()
+    from torchsummary import summary
+    summary(Params().model, (3, 640, 480))
+    run_flow()
     ae_predictions_train, ae_predictions_test = VisualizationUtils.visualize_ae_input_output_pairs()
 
     pass
