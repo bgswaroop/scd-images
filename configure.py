@@ -18,5 +18,5 @@ class Params(object):
         )
         self.epochs = 10
 
-        self.train_data = r'D:\Data\20200622_SCD_INCIBE_custom_Dataset'
-        self.test_data = r'D:\Data\20200622_SCD_INCIBE_custom_Dataset'
+        self.train_data = r'D:\Data\INCIBE_dataset\train'
+        self.test_data = r'D:\Data\INCIBE_dataset\test'

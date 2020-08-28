@@ -85,7 +85,7 @@ if __name__ == '__main__':
     from configure import Params
     from data import Data
     from visualization_utils import VisualizationUtils
-    from utils import Utils
+    from utils.utils import Utils
 
     from torchsummary import summary
     summary(Params().model, (3, 640, 480))

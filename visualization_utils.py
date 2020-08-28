@@ -8,7 +8,7 @@ import torch
 
 from configure import Params
 from data import Data
-from utils import Utils
+from utils.utils import Utils
 
 AE_Sample = namedtuple('AE_Sample', ['label', 'loss', 'input', 'output'])
 
