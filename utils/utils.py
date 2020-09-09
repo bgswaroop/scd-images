@@ -28,10 +28,12 @@ class Utils:
         torch.save(model, runtime_dir.joinpath('epoch{}_loss{}_valLoss{}.pt'.format(epoch, train_loss, val_loss)))
 
     @staticmethod
-    def get_initial_epoch(runtime_dir, model, history):
+    def get_initial_epoch(pre_trained_models_dir, model):
         initial_epoch = 1
+        history = {'epochs': [], 'learning_rate': [], 'accuracy': [], 'loss': [], 'val_accuracy': [], 'val_loss': []}
+
         pre_trained_model_path = None
-        for model_path in Path(runtime_dir).glob('epoch*.pt'):
+        for model_path in Path(pre_trained_models_dir).glob('epoch*.pt'):
             model_path = str(model_path)
             epoch_num = int(model_path[model_path.find("epoch") + 5:model_path.find("epoch") + 8])
             if initial_epoch <= epoch_num:
@@ -40,7 +42,7 @@ class Utils:
 
         if pre_trained_model_path:
             model = torch.load(pre_trained_model_path)
-            filename = Path(runtime_dir).joinpath('history.pkl')
+            filename = Path(pre_trained_models_dir).joinpath('history.pkl')
             if filename.exists():
                 with open(str(filename), 'rb') as f:
                     history = pickle.load(f)
@@ -48,18 +50,18 @@ class Utils:
         return initial_epoch, model, history
 
     @staticmethod
-    def save_best_model(runtime_dir, history):
+    def save_best_model(pre_trained_models_dir, destination_dir, history, name):
         import shutil
 
         best_epoch = Utils.choose_best_epoch_from_history(history) + 1
         pre_trained_model_path = None
-        for model_path in Path(runtime_dir).glob('epoch*.pt'):
+        for model_path in Path(pre_trained_models_dir).glob('epoch*.pt'):
             model_path = str(model_path)
             epoch_num = int(model_path[model_path.find("epoch") + 5:model_path.find("epoch") + 8])
             if best_epoch == epoch_num:
                 pre_trained_model_path = model_path
                 break
-        shutil.copy(pre_trained_model_path, runtime_dir.joinpath('ae.pt'))
+        shutil.copy(pre_trained_model_path, destination_dir.joinpath('{}.pt'.format(name)))
 
     @staticmethod
     def choose_best_epoch_from_history(history):

@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from configure import Params
-from data import Data
+from configure import Configure, SigNet
+from signature_net.data import Data
 from utils.utils import Utils
 
 AE_Sample = namedtuple('AE_Sample', ['loss', 'input', 'output', 'label'])
@@ -117,17 +117,16 @@ class VisualizationUtils:
     @staticmethod
     def visualize_ae_input_output_pairs():
         # load the model
-        params = Params()
-        runtime_dir = Path(r'./runtime_dir')
-        with open(runtime_dir.joinpath('ae.pt'), 'rb') as f:
-            params.model = torch.load(f)
+        runtime_dir = Configure.runtime_dir
+        with open(runtime_dir.joinpath('{}.pt'.format(SigNet.name)), 'rb') as f:
+            SigNet.model = torch.load(f)
 
         # load the data
-        train_loader = Data().load_data_for_visualization(dataset=params.train_data, config_mode='train')
-        test_loader = Data().load_data_for_visualization(dataset=params.test_data, config_mode='test')
+        train_loader = Data.load_data_for_visualization(dataset=Configure.train_data, config_mode='train')
+        test_loader = Data.load_data_for_visualization(dataset=Configure.test_data, config_mode='test')
 
         # extract the input output pairs
-        params.model.eval()
+        SigNet.model.eval()
         with torch.no_grad():
             predictions_filename = runtime_dir.joinpath('ae_predictions_train.pkl')
             if predictions_filename.exists():
@@ -136,9 +135,9 @@ class VisualizationUtils:
             else:
                 ae_predictions_train = []
                 for input_image, target_image in train_loader:
-                    inputs = input_image.to(params.device)
-                    outputs = params.model(inputs)
-                    loss = params.criterion(outputs, target_image.to(params.device)).cpu().item()
+                    inputs = input_image.to(Configure.device)
+                    outputs = SigNet.model(inputs)
+                    loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
 
                     input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
                     output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
@@ -155,9 +154,9 @@ class VisualizationUtils:
             else:
                 ae_predictions_test = []
                 for input_image, target_image in test_loader:
-                    inputs = input_image.to(params.device)
-                    outputs = params.model(inputs)
-                    loss = params.criterion(outputs, target_image.to(params.device)).cpu().item()
+                    inputs = input_image.to(Configure.device)
+                    outputs = SigNet.model(inputs)
+                    loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
 
                     input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
                     output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
@@ -196,16 +195,14 @@ class VisualizationUtils:
 
         return ae_predictions_train, ae_predictions_test
 
-
     @staticmethod
     def save_avg_fourier_images(class_wise_labels=None):
         # load the model
-        params = Params()
-        save_to_dir = Path(r'./runtime_dir/averaged_spectrum')
+        save_to_dir = Configure.runtime_dir.joinpath('averaged_spectrum')
         save_to_dir.mkdir(parents=True, exist_ok=True)
 
         if not class_wise_labels:
-            class_wise_labels = Data().compute_avg_fourier_spectrum(dataset=params.train_data)
+            class_wise_labels = Data().compute_avg_fourier_spectrum(dataset=Configure.train_data)
 
         # plt.figure(figsize=(20, 10))
         for idx, label in enumerate(class_wise_labels):
@@ -226,18 +223,6 @@ class VisualizationUtils:
             plt.show()
             plt.close()
 
-    def save_abs_fourier_images(self):
-
-        runtime_dir = Path(r'./runtime_dir')
-        predictions_filename = runtime_dir.joinpath('ae_predictions_train.pkl')
-        if predictions_filename.exists():
-            with open(predictions_filename, 'rb') as f:
-                ae_predictions = pickle.load(f)
-        save_to_dir = runtime_dir.joinpath('abs_fft_images/train')
-        save_to_dir.mkdir(exist_ok=True, parents=True)
-        for result in ae_predictions:
-            pass
-
 
 if __name__ == "__main__":
     utils = VisualizationUtils()
@@ -246,4 +231,3 @@ if __name__ == "__main__":
     #     save_to_dir=None
     # )
     # utils.save_avg_fourier_images()
-    utils.save_abs_fourier_images()
