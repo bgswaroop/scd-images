@@ -66,9 +66,9 @@ class Data(object):
 
         elif Path(dataset_name).is_dir():
             IDs = list(Path(dataset_name).glob('*/*.jpg'))
-            labels = {}
+            labels = self.compute_avg_fourier_spectrum(dataset=dataset_name)
             for idx, img_path in enumerate(IDs):
-                labels[img_path] = img_path.parent.name
+                labels[img_path] = labels[img_path.parent.name]
             dataset = Dataset(IDs, labels, transform=self.params.transform)
         else:
             raise ValueError('Invalid dataset. Possible types are `mnist` or any valid dataset directory.')
@@ -89,3 +89,16 @@ class Data(object):
             return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=8, pin_memory=True)
         elif config_mode == 'test':
             return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=8, pin_memory=True)
+
+    def compute_avg_fourier_spectrum(self, dataset):
+        labels = {}
+        for dir_path in list(Path(dataset).glob('*')):
+            labels[dir_path.name] = []
+            for idx, img_path in enumerate(dir_path.glob('*')):
+                X = Image.open(img_path)
+                X = Params().transform(X)
+                labels[img_path.parent.name].append(X)
+
+            # compute_average
+            labels[dir_path.name] = torch.mean(torch.stack(labels[dir_path.name]), dim=0)
+        return labels

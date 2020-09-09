@@ -45,9 +45,10 @@ class MyFFTTransform:
             real, imag = self.fftshift(real=x[..., 0], imag=x[..., 1])
             x = torch.sqrt(torch.square(real) + torch.square(imag))  # magnitude of complex number
             x = torch.log(x)  # scale the values
-            x = (x - torch.min(x)) / (torch.max(x) - torch.min(x))
+            x = (x - torch.min(x)) / (torch.max(x) - torch.min(x))  # normalize the values
             return x
         elif self.direction == 'backward':
+            # real, imag = self.ifftshift(real=x[..., 0], imag=x[..., 1])
             x = torch.Tensor.irfft(x, signal_ndim=self.signal_ndim, normalized=self.normalized, onesided=self.onesided)
             # x = x / 255.0
             return x

@@ -51,7 +51,7 @@ class Utils:
     def save_best_model(runtime_dir, history):
         import shutil
 
-        best_epoch = Utils.choose_best_epoch_from_history(history)
+        best_epoch = Utils.choose_best_epoch_from_history(history) + 1
         pre_trained_model_path = None
         for model_path in Path(runtime_dir).glob('epoch*.pt'):
             model_path = str(model_path)

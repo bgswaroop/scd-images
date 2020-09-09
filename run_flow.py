@@ -3,20 +3,20 @@ from pathlib import Path
 import pytorch_lightning
 
 
-def train_batch(inputs, params):
+def train_batch(inputs, expected_outputs, params):
     inputs = inputs.to(params.device)
     params.optimizer.zero_grad()
     outputs = params.model(inputs)
-    loss = params.criterion(outputs, inputs)
+    loss = params.criterion(outputs, expected_outputs.to(params.device))
     loss.backward()
     params.optimizer.step()
     return loss.item()
 
 
-def test_batch(inputs, params):
+def test_batch(inputs, expected_outputs, params):
     inputs = inputs.to(params.device)
     outputs = params.model(inputs)
-    loss = params.criterion(outputs, inputs)
+    loss = params.criterion(outputs, expected_outputs.to(params.device))
     return loss.item()
 
 
@@ -26,6 +26,7 @@ def run_flow():
     params = Params()
     train_loader = Data().load_data(dataset=params.train_data, config_mode='train')
     test_loader = Data().load_data(dataset=params.test_data, config_mode='test')
+
     history = {'epochs': [], 'learning_rate': [], 'accuracy': [], 'loss': [], 'val_accuracy': [], 'val_loss': []}
 
     runtime_dir = Path('./runtime_dir')
@@ -42,11 +43,10 @@ def run_flow():
         train_loss = 0
         epoch_start_time = time.perf_counter()
         profiler.start('train epoch')
-        for mini_batch, _ in train_loader:
+        for mini_batch, labels in train_loader:
             profiler.start('train mini-batch')
-            # mini_batch = mini_batch.view(mini_batch.shape[0], -1).to(params.device)
             mini_batch = mini_batch.to(params.device)
-            train_loss += train_batch(mini_batch, params)
+            train_loss += train_batch(inputs=mini_batch, expected_outputs=labels, params=params)
             profiler.stop('train mini-batch')
 
         train_loss = train_loss / len(train_loader)
@@ -59,10 +59,10 @@ def run_flow():
         profiler.start('validate epoch')
         params.model.eval()
         val_loss = 0
-        for mini_batch, _ in test_loader:
+        for mini_batch, labels in test_loader:
             # mini_batch = mini_batch.view(mini_batch.shape[0], -1).to(params.device)
             mini_batch = mini_batch.to(params.device)
-            val_loss += test_batch(mini_batch, params)
+            val_loss += test_batch(inputs=mini_batch, expected_outputs=labels, params=params)
 
         val_loss = val_loss / len(test_loader)
         profiler.stop('validate epoch')
