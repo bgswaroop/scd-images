@@ -1,10 +1,11 @@
 import time
 
+import torch
 from torchsummary import summary
 
 from configure import Configure, SigNet
 from signature_net.data import Data
-from utils.utils import Utils
+from utils.training_utils import Utils
 from utils.visualization_utils import VisualizationUtils
 
 
@@ -21,6 +22,7 @@ class SigNetFlow(object):
         return loss.item()
 
     @staticmethod
+    @torch.no_grad()
     def test_batch(inputs, expected_outputs):
         inputs = inputs.to(Configure.device)
         outputs = SigNet.model(inputs)
@@ -41,7 +43,7 @@ class SigNetFlow(object):
             SigNet.model.train()
             train_loss = 0
             epoch_start_time = time.perf_counter()
-            for input_images, target_images in train_loader:
+            for input_images, (target_images, _) in train_loader:
                 input_images = input_images.to(Configure.device)
                 train_loss += cls.train_batch(inputs=input_images, expected_outputs=target_images)
 
@@ -53,7 +55,7 @@ class SigNetFlow(object):
             # Validate
             SigNet.model.eval()
             val_loss = 0
-            for input_images, target_images in test_loader:
+            for input_images, (target_images, _) in test_loader:
                 input_images = input_images.to(Configure.device)
                 val_loss += cls.test_batch(inputs=input_images, expected_outputs=target_images)
 
@@ -71,8 +73,27 @@ class SigNetFlow(object):
                               destination_dir=Configure.runtime_dir,
                               history=history, name=SigNet.name)
 
+    @classmethod
+    def extract_signatures(cls, config_mode='train'):
+        """
+        Method to extract signatures and labels
+        :param config_mode: string - train / test
+        :return: list of labelled signatures
+        """
+        pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SigNet.name))
+        SigNet.model = torch.load(pre_trained_model_path)
+
+        data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+        SigNet.model.eval()
+        signatures = []
+        for input_images, (_, input_img_paths) in data_loader:
+            input_images = input_images.to(Configure.device)
+            features = SigNet.model.extract_features(input_images).to(torch.device("cpu")).detach()
+            signatures += list(zip(features, input_img_paths))
+        return signatures
+
 
 if __name__ == '__main__':
     summary(SigNet.model, (3, 320, 480))
-    SigNetFlow.train()
+    SigNetFlow.extract_signatures()
     # ae_predictions_train, ae_predictions_test = VisualizationUtils.visualize_ae_input_output_pairs()

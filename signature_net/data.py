@@ -118,10 +118,11 @@ class Data(object):
 
         elif Path(dataset_name).is_dir():
             IDs = list(Path(dataset_name).glob('*/*.jpg'))
-            labels = cls.compute_avg_fourier_spectrum(dataset=dataset_name)
+            class_labels = cls.compute_avg_fourier_spectrum(dataset=dataset_name)
+            img_labels = {}
             for img_path in IDs:
-                labels[img_path] = labels[img_path.parent.name]
-            dataset = Dataset(list_ids=IDs, labels=labels, transform=cls.spectrum_image_transform)
+                img_labels[img_path] = (class_labels[img_path.parent.name], str(img_path))
+            dataset = Dataset(list_ids=IDs, labels=img_labels, transform=cls.spectrum_image_transform)
         else:
             raise ValueError('Invalid dataset. Possible types are `mnist` or any valid dataset directory.')
         return dataset
@@ -131,9 +132,9 @@ class Data(object):
         dataset = cls.load_data_by_name(dataset, config_mode)
         # Prepare for processing
         if config_mode == 'train':
-            return torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
         elif config_mode == 'test':
-            return torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=False, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):

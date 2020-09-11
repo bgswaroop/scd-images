@@ -1,15 +1,16 @@
+import torch
 from torch import nn
 
 
 class AutoEncoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=8, kernel_size=(3, 3), padding=(1, 1))
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=8, kernel_size=(3, 3), padding=(1, 1))
+        self.conv2 = nn.Conv2d(in_channels=8, out_channels=8, kernel_size=(3, 3), padding=(1, 1))
         self.conv3 = nn.Conv2d(in_channels=8, out_channels=4, kernel_size=(3, 3), padding=(1, 1))
         self.conv4 = nn.Conv2d(in_channels=4, out_channels=8, kernel_size=(3, 3), padding=(1, 1))
-        self.conv5 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=(3, 3), padding=(1, 1))
-        self.conv6 = nn.Conv2d(in_channels=16, out_channels=3, kernel_size=(3, 3), padding=(1, 1))
+        self.conv5 = nn.Conv2d(in_channels=8, out_channels=8, kernel_size=(3, 3), padding=(1, 1))
+        self.conv6 = nn.Conv2d(in_channels=8, out_channels=3, kernel_size=(3, 3), padding=(1, 1))
 
     @staticmethod
     def upsample(size):
@@ -40,3 +41,8 @@ class AutoEncoder(nn.Module):
         encoded_features = self._encoder(input_features)
         decoded_features = self._decoder(encoded_features)
         return decoded_features
+
+    def extract_features(self, input_features):
+        encoded_features = self._encoder(input_features)
+        features = torch.flatten(encoded_features, start_dim=1)
+        return features
