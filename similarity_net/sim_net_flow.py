@@ -1,6 +1,6 @@
 import time
+
 import torch
-from torchsummary import summary
 
 from configure import Configure, SimNet
 from similarity_net.data import Data
@@ -11,22 +11,26 @@ from utils.visualization_utils import VisualizationUtils
 class SimNetFlow(object):
 
     @staticmethod
-    def train_batch(inputs, expected_outputs):
+    def train_batch(inputs, expected_outputs, threshold=0.5):
         inputs = [x.to(Configure.device) for x in inputs]
         SimNet.optimizer.zero_grad()
         outputs = SimNet.model(inputs)
         loss = SimNet.criterion(outputs, expected_outputs.to(Configure.device))
+        prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
+        accuracy = sum(prediction == expected_outputs).item() / len(expected_outputs)
         loss.backward()
         SimNet.optimizer.step()
-        return loss.item()
+        return accuracy, loss.item()
 
     @staticmethod
     @torch.no_grad()
-    def test_batch(inputs, expected_outputs):
+    def test_batch(inputs, expected_outputs, threshold=0.5):
         inputs = [x.to(Configure.device) for x in inputs]
         outputs = SimNet.model(inputs)
         loss = SimNet.criterion(outputs, expected_outputs.to(Configure.device))
-        return loss.item()
+        prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
+        accuracy = sum(prediction == expected_outputs).item() / len(expected_outputs)
+        return accuracy, loss.item()
 
     @classmethod
     def train(cls):
@@ -39,31 +43,43 @@ class SimNetFlow(object):
 
             # Train
             SimNet.model.train()
-            train_loss = 0
+            train_accuracy, train_loss = 0, 0
             epoch_start_time = time.perf_counter()
             for sig_pairs, (sim_scores, _) in train_loader:
-                train_loss += cls.train_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                acc, loss = cls.train_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                train_accuracy += acc
+                train_loss += loss
 
             train_loss = train_loss / len(train_loader)
+            train_accuracy = train_accuracy / len(train_loader)
+
             lr = SimNet.scheduler.get_last_lr()
             SimNet.scheduler.step()
             epoch_end_time = time.perf_counter()
 
             # Validate
             SimNet.model.eval()
-            val_loss = 0
+            val_accuracy, val_loss = 0, 0
             for sig_pairs, (sim_scores, _) in test_loader:
-                val_loss += cls.test_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                acc, loss = cls.test_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                val_accuracy += acc
+                val_loss += loss
 
             val_loss = val_loss / len(test_loader)
+            val_accuracy = val_accuracy / len(train_loader)
 
             # Log epoch statistics
-            history = Utils.update_history(history, epoch, train_loss, val_loss, lr, Configure.simnet_dir)
+            history = Utils.update_history(history=history, epoch=epoch,
+                                           train_accuracy=train_accuracy, train_loss=train_loss,
+                                           val_accuracy=val_accuracy, val_loss=val_loss,
+                                           lr=lr, runtime_dir=Configure.simnet_dir)
             VisualizationUtils.plot_learning_statistics(history, Configure.simnet_dir)
-            Utils.save_model_on_epoch_end(epoch, train_loss, val_loss, SimNet.model, Configure.simnet_dir)
+            Utils.save_model_on_epoch_end(epoch, train_loss, val_loss, SimNet.model, Configure.simnet_dir,
+                                          train_accuracy, val_accuracy)
 
-            print("epoch : {}/{}, train_loss = {:.6f}, val_loss = {:.6f}, time = {:.2f} sec".format(
-                epoch, SimNet.epochs, train_loss, val_loss, epoch_end_time - epoch_start_time))
+            print("""epoch : {}/{}, train_loss = {:.6f}, val_loss = {:.6f}, train_acc = {:.6f}, val_acc = {:.6f}, 
+            time = {:.2f} sec""".format(epoch, SimNet.epochs, train_loss, val_loss, train_accuracy, val_accuracy,
+                                        epoch_end_time - epoch_start_time))
 
         Utils.save_best_model(pre_trained_models_dir=Configure.simnet_dir,
                               destination_dir=Configure.runtime_dir,
@@ -72,5 +88,6 @@ class SimNetFlow(object):
 
 if __name__ == '__main__':
     # with torch.no_grad():
+    #     SimNet.model.eval()
     #     summary(SimNet.model, (38400, 38400))
     SimNetFlow.train()

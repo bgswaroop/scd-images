@@ -62,7 +62,8 @@ class SigNetFlow(object):
             val_loss = val_loss / len(test_loader)
 
             # Log epoch statistics
-            history = Utils.update_history(history, epoch, train_loss, val_loss, lr, Configure.signet_dir)
+            history = Utils.update_history(history=history, epoch=epoch, train_loss=train_loss, val_loss=val_loss,
+                                           lr=lr, runtime_dir=Configure.signet_dir)
             VisualizationUtils.plot_learning_statistics(history, Configure.signet_dir)
             Utils.save_model_on_epoch_end(epoch, train_loss, val_loss, SigNet.model, Configure.signet_dir)
 

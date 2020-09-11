@@ -9,23 +9,28 @@ class Utils:
         pass
 
     @staticmethod
-    def update_history(history, epoch, train_loss, val_loss, lr, runtime_dir):
+    def update_history(history, epoch, train_loss, val_loss, lr, runtime_dir, train_accuracy=None, val_accuracy=None):
         history['epochs'].append(epoch)
         history['learning_rate'].append(lr)
-        history['accuracy'].append(None)
+        history['accuracy'].append(train_accuracy)
         history['loss'].append(train_loss)
-        history['val_accuracy'].append(None)
+        history['val_accuracy'].append(val_accuracy)
         history['val_loss'].append(val_loss)
         with open(runtime_dir.joinpath('history.pkl'), 'wb+') as f:
             pickle.dump(history, f)
         return history
 
     @staticmethod
-    def save_model_on_epoch_end(epoch, train_loss, val_loss, model, runtime_dir):
+    def save_model_on_epoch_end(epoch, train_loss, val_loss, model, runtime_dir, train_accuracy=None, val_accuracy=None):
         train_loss = str(round(train_loss, 4)).ljust(4, '0')
         val_loss = str(round(val_loss, 4)).ljust(4, '0')
+        if train_accuracy:
+            train_accuracy = str(round(train_accuracy, 4)).ljust(4, '0')
+        if val_accuracy:
+            val_accuracy = str(round(val_accuracy, 4)).ljust(4, '0')
         epoch = str(epoch).zfill(3)
-        torch.save(model, runtime_dir.joinpath('epoch{}_loss{}_valLoss{}.pt'.format(epoch, train_loss, val_loss)))
+        torch.save(model, runtime_dir.joinpath('epoch{}_loss{}_valLoss{}_acc{}_valAcc{}.pt'.
+                                               format(epoch, train_loss, val_loss, train_accuracy, val_accuracy)))
 
     @staticmethod
     def get_initial_epoch(pre_trained_models_dir, model):

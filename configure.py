@@ -28,7 +28,7 @@ class SigNet(object):
     criterion = nn.MSELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 1
+    epochs = 10
 
 
 class SimNet(object):
@@ -38,4 +38,4 @@ class SimNet(object):
     criterion = nn.BCELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 4
+    epochs = 15

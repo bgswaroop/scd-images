@@ -38,7 +38,7 @@ class Data(object):
         def label_signature_pairs(x):
             sig_pair = x[0][0], x[1][0]
             source_image_paths = x[0][1], x[1][1]
-            similarity_label = torch.tensor(1.0) if Path(x[0][1]).parent == Path(x[1][1]).parent else torch.tensor(0.0)
+            similarity_label = torch.tensor([1.0]) if Path(x[0][1]).parent == Path(x[1][1]).parent else torch.tensor([0.0])
             label = (similarity_label, source_image_paths)
             return sig_pair, label
 
