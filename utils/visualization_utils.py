@@ -54,7 +54,7 @@ class VisualizationUtils:
         loss = history['loss']
         val_loss = history['val_loss']
         epochs = history['epochs']
-        selected_epoch = Utils.choose_best_epoch_from_history(history)
+        selected_epoch = Utils.choose_best_epoch_from_history(history) + 1
 
         plt.figure()
         plt.plot(epochs, acc, 'r', label='Train')

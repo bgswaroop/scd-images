@@ -159,6 +159,6 @@ class Utils:
 
 if __name__ == '__main__':
     Utils.split_train_test(test_set_size=0.2,
-                           source_images_dir=Path(r'D:\Data\INCIBE_dataset\source_devices'),
-                           train_images_dir=Path(r'D:\Data\INCIBE_dataset\train'),
-                           test_images_dir=Path(r'D:\Data\INCIBE_dataset\test'))
+                           source_images_dir=Path(r'D:\Data\Dresden\source_devices\jpeg'),
+                           train_images_dir=Path(r'D:\Data\Dresden\train\jpeg'),
+                           test_images_dir=Path(r'D:\Data\Dresden\test\jpeg'))

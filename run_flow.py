@@ -1,5 +1,5 @@
 from signature_net.sig_net_flow import SigNetFlow
-from utils.visualization_utils import VisualizationUtils
+from signature_net.utils import Utils
 from similarity_net.sim_net_flow import SimNetFlow
 
 
@@ -8,8 +8,13 @@ def run_flow():
     A high level function to run the train and evaluation flows
     :return: None
     """
+
+    # Signature Net
     SigNetFlow.train()
-    # VisualizationUtils.visualize_ae_input_output_pairs()
+    Utils.visualize_ae_input_output_pairs()
+    Utils.save_avg_fourier_images()
+
+    # Similarity Net
     SimNetFlow.train()
 
 

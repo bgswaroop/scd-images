@@ -84,7 +84,13 @@ class SigNetFlow(object):
         pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SigNet.name))
         SigNet.model = torch.load(pre_trained_model_path)
 
-        data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+        if config_mode == 'train':
+            data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+        elif config_mode == 'test':
+            data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
+        else:
+            raise ValueError('Invalid config_mode')
+
         SigNet.model.eval()
         signatures = []
         for input_images, (_, input_img_paths) in data_loader:

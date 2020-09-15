@@ -1,6 +1,7 @@
 import pickle
 
 import torch
+import random
 from matplotlib import pyplot as plt
 
 from configure import Configure, SigNet
@@ -19,54 +20,59 @@ class Utils(object):
 
         # load the data
         train_loader = Data.load_data_for_visualization(dataset=Configure.train_data, config_mode='train')
-        test_loader = Data.load_data_for_visualization(dataset=Configure.test_data, config_mode='test')
+        # test_loader = Data.load_data_for_visualization(dataset=Configure.test_data, config_mode='test')
 
         # extract the input output pairs
         SigNet.model.eval()
         with torch.no_grad():
-            predictions_filename = runtime_dir.joinpath('ae_predictions_train.pkl')
-            if predictions_filename.exists():
-                with open(predictions_filename, 'rb') as f:
-                    ae_predictions_train = pickle.load(f)
-            else:
-                ae_predictions_train = []
-                for input_image, (target_image, _) in train_loader:
-                    inputs = input_image.to(Configure.device)
-                    outputs = SigNet.model(inputs)
-                    loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
+            # predictions_filename = runtime_dir.joinpath('ae_predictions_train.pkl')
+            # if predictions_filename.exists():
+            #     with open(predictions_filename, 'rb') as f:
+            #         ae_predictions_train = pickle.load(f)
+            # else:
 
-                    input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    target_img = target_image.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    ae_predictions_train.append(AE_Sample(loss, input_img, output_img, target_img))
+            count = 0
+            ae_predictions_train = []
+            for input_image, (target_image, _) in train_loader:
+                inputs = input_image.to(Configure.device)
+                outputs = SigNet.model(inputs)
+                loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
 
-                with open(predictions_filename, 'wb+') as f:
-                    pickle.dump(ae_predictions_train, f)
+                input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+                output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+                target_img = target_image.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+                ae_predictions_train.append(AE_Sample(loss, input_img, output_img, target_img))
+                count += 1
+                if count == 10:
+                    break
 
-            predictions_filename = runtime_dir.joinpath('ae_predictions_test.pkl')
-            if predictions_filename.exists():
-                with open(predictions_filename, 'rb') as f:
-                    ae_predictions_test = pickle.load(f)
-            else:
-                ae_predictions_test = []
-                for input_image, (target_image, _) in test_loader:
-                    inputs = input_image.to(Configure.device)
-                    outputs = SigNet.model(inputs)
-                    loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
+            #     with open(predictions_filename, 'wb+') as f:
+            #         pickle.dump(ae_predictions_train, f)
+            #
+            # predictions_filename = runtime_dir.joinpath('ae_predictions_test.pkl')
+            # if predictions_filename.exists():
+            #     with open(predictions_filename, 'rb') as f:
+            #         ae_predictions_test = pickle.load(f)
+            # else:
+            #     ae_predictions_test = []
+            #     for input_image, (target_image, _) in test_loader:
+            #         inputs = input_image.to(Configure.device)
+            #         outputs = SigNet.model(inputs)
+            #         loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
+            #
+            #         input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+            #         output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+            #         target_img = target_image.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
+            #         ae_predictions_test.append(AE_Sample(loss, input_img, output_img, target_img))
+            #
+            #     with open(predictions_filename, 'wb+') as f:
+            #         pickle.dump(ae_predictions_test, f)
 
-                    input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    target_img = target_image.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-                    ae_predictions_test.append(AE_Sample(loss, input_img, output_img, target_img))
+        save_to_dir = Configure.runtime_dir.joinpath('sample_ae_pairs')
+        save_to_dir.mkdir(parents=True, exist_ok=True)
 
-                with open(predictions_filename, 'wb+') as f:
-                    pickle.dump(ae_predictions_test, f)
-
-        selected_predictions = ae_predictions_train[:10]
-
-        # visualize the data
-        from matplotlib import pyplot as plt
-
+        # randomly visualize 10 sample auto-encoder pairs
+        selected_predictions = random.sample(ae_predictions_train, k=10)
         for idx, ae_prediction in enumerate(selected_predictions):
             fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(10, 4))
             ax[0].imshow(ae_prediction.input)
@@ -78,12 +84,12 @@ class Utils(object):
             ax[2].imshow(ae_prediction.output)
             ax[2].set_title('Reconstructed Output')
 
-            # plt.savefig(runtime_dir.joinpath('{}.png'.format(idx)))
+            plt.savefig(save_to_dir.joinpath('{}.png'.format(idx)))
             st = fig.suptitle('Reconstruction MSE loss: {:.4f}'.format(ae_prediction.loss))
 
             # todo: fix the height of the plot title
             # shift subplots down:
-            st.set_y(0.90)
+            st.set_y(0.85)
             fig.subplots_adjust(top=0.85)
 
             # plt.title()
@@ -91,7 +97,7 @@ class Utils(object):
             plt.show()
             plt.close()
 
-        return ae_predictions_train, ae_predictions_test
+        return ae_predictions_train
 
     @staticmethod
     def save_avg_fourier_images(class_wise_labels=None):

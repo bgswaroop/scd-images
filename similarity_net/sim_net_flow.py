@@ -16,6 +16,10 @@ class SimNetFlow(object):
         SimNet.optimizer.zero_grad()
         outputs = SimNet.model(inputs)
         loss = SimNet.criterion(outputs, expected_outputs.to(Configure.device))
+        # fixme:
+        # UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach()
+        # or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+        #   prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
         prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
         accuracy = sum(prediction == expected_outputs).item() / len(expected_outputs)
         loss.backward()

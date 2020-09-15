@@ -12,7 +12,7 @@ class Configure(object):
     train_data = r'D:\Data\INCIBE_dataset\train'
     test_data = r'D:\Data\INCIBE_dataset\test'
 
-    runtime_dir = Path(__file__).parent.absolute().joinpath('runtime_dir')
+    runtime_dir = Path(__file__).parent.absolute().joinpath('runtime_dir_incibe')
     signet_dir = runtime_dir.joinpath('signature_net')
     simnet_dir = runtime_dir.joinpath('similarity_net')
 
@@ -28,7 +28,7 @@ class SigNet(object):
     criterion = nn.MSELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 10
+    epochs = 6
 
 
 class SimNet(object):
@@ -38,4 +38,4 @@ class SimNet(object):
     criterion = nn.BCELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 15
+    epochs = 6
