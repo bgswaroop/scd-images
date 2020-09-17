@@ -75,19 +75,22 @@ class SigNetFlow(object):
                               history=history, name=SigNet.name)
 
     @classmethod
-    def extract_signatures(cls, config_mode='train'):
+    def extract_signatures(cls, config_mode='train', images_dir=None):
         """
         Method to extract signatures and labels
+        :param images_dir: Dir
         :param config_mode: string - train / test
         :return: list of labelled signatures
         """
         pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SigNet.name))
         SigNet.model = torch.load(pre_trained_model_path)
 
-        if config_mode == 'train':
+        if config_mode == 'train' and not images_dir:
             data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
-        elif config_mode == 'test':
+        elif config_mode == 'test' and not images_dir:
             data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
+        elif images_dir:
+            data_loader = Data.load_data(dataset=images_dir, config_mode=config_mode)
         else:
             raise ValueError('Invalid config_mode')
 
