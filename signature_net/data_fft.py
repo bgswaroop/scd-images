@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import torch
@@ -80,7 +79,6 @@ class Dataset(torch.utils.data.Dataset):
 
         # Load data and get label
         X = Image.open(ID)
-        # print(ID)
         y = self.labels[ID]
 
         if self.transform:
@@ -96,40 +94,25 @@ class Data(object):
          MyFFTTransform(direction='forward')])
 
     @classmethod
-    def load_data_by_name(cls, dataset_name, config_mode):
-        if dataset_name == 'mnist':
-            # Create a directory to download and save the data
-            root_dir = Path(os.path.dirname(__file__)).joinpath('torch_dataset')
-            root_dir.mkdir(parents=True, exist_ok=True)
+    def prepare_torch_dataset(cls, image_paths):
+        """
+        :param image_paths: dataset directory or a list containing image paths
+        :return: a torch dataset
+        """
+        if Path(image_paths).is_dir():
+            image_paths = list(Path(image_paths).glob('*/*.jpg'))
 
-            # Prepare the data
-            if config_mode == 'train':
-                dataset = torchvision.datasets.MNIST(
-                    root=root_dir, train=True, download=True,
-                    transform=torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-                )
-            elif config_mode == 'test':
-                dataset = torchvision.datasets.MNIST(
-                    root=root_dir, train=False, download=True,
-                    transform=torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-                )
-            else:
-                raise ValueError('Invalid mode. Possible modes are `train` and `test`.')
+        class_labels = cls.compute_avg_fft_labels(dataset=image_paths)
+        img_labels = {}
+        for img_path in image_paths:
+            img_labels[img_path] = (class_labels[img_path.parent.name], str(img_path))
+        dataset = Dataset(list_ids=image_paths, labels=img_labels, transform=cls.spectrum_image_transform)
 
-        elif Path(dataset_name).is_dir():
-            IDs = list(Path(dataset_name).glob('*/*.jpg'))
-            class_labels = cls.compute_avg_fourier_spectrum(dataset=dataset_name)
-            img_labels = {}
-            for img_path in IDs:
-                img_labels[img_path] = (class_labels[img_path.parent.name], str(img_path))
-            dataset = Dataset(list_ids=IDs, labels=img_labels, transform=cls.spectrum_image_transform)
-        else:
-            raise ValueError('Invalid dataset. Possible types are `mnist` or any valid dataset directory.')
         return dataset
 
     @classmethod
     def load_data(cls, dataset, config_mode):
-        dataset = cls.load_data_by_name(dataset, config_mode)
+        dataset = cls.prepare_torch_dataset(dataset)
         # Prepare for processing
         if config_mode == 'train':
             return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
@@ -138,7 +121,7 @@ class Data(object):
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):
-        dataset = cls.load_data_by_name(dataset, config_mode)
+        dataset = cls.prepare_torch_dataset(dataset)
         # Prepare for processing
         if config_mode == 'train':
             return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=8, pin_memory=True)
@@ -146,15 +129,27 @@ class Data(object):
             return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=8, pin_memory=True)
 
     @classmethod
-    def compute_avg_fourier_spectrum(cls, dataset):
-        labels = {}
-        for dir_path in list(Path(dataset).glob('*')):
-            labels[dir_path.name] = []
-            for idx, img_path in enumerate(dir_path.glob('*')):
-                X = Image.open(img_path)
-                X = cls.spectrum_image_transform(X)
-                labels[img_path.parent.name].append(X)
+    def compute_avg_fft_labels(cls, dataset):
+        """
+        :param dataset: Path to a dataset directory or a list containing image paths
+        :return: A dictionary with class_names as their keys and corresponding averaged fourier image as the value
+        """
 
-            # compute_average
-            labels[dir_path.name] = torch.mean(torch.stack(labels[dir_path.name]), dim=0)
+        if isinstance(dataset, list):
+            labels = {class_folder: [] for class_folder in set([Path(y).parent.name for y in dataset])}
+            img_paths = dataset
+        elif Path(dataset).is_dir():
+            labels = {class_folder: [] for class_folder in Path(dataset).glob('*')}
+            img_paths = Path(dataset).glob('*/*')
+        else:
+            raise ValueError('Invalid dataset')
+
+        for img_path in img_paths:
+            X = Image.open(img_path)
+            X = cls.spectrum_image_transform(X)
+            labels[img_path.parent.name].append(X)
+
+        for dir_path in labels:
+            labels[dir_path] = torch.mean(torch.stack(labels[dir_path]), dim=0)
+
         return labels

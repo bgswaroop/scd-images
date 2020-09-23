@@ -106,9 +106,9 @@ class VisualizationUtils:
         plt.close()
 
     @staticmethod
-    def plot_learning_statistics(history, runtime_dir):
-        VisualizationUtils.plot_training_history(save_to_dir=runtime_dir, history=history)
-        VisualizationUtils.plot_learning_rate(save_to_dir=runtime_dir, history=history)
+    def plot_learning_statistics(history, save_to_dir):
+        VisualizationUtils.plot_training_history(save_to_dir=save_to_dir, history=history)
+        VisualizationUtils.plot_learning_rate(save_to_dir=save_to_dir, history=history)
 
 
 if __name__ == "__main__":

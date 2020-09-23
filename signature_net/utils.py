@@ -5,7 +5,7 @@ import random
 from matplotlib import pyplot as plt
 
 from configure import Configure, SigNet
-from signature_net.data import Data
+from signature_net.data_fft import Data
 from utils.visualization_utils import AE_Sample
 
 
@@ -106,7 +106,7 @@ class Utils(object):
         save_to_dir.mkdir(parents=True, exist_ok=True)
 
         if not class_wise_labels:
-            class_wise_labels = Data().compute_avg_fourier_spectrum(dataset=Configure.train_data)
+            class_wise_labels = Data.compute_avg_fft_labels(dataset=Configure.train_data)
 
         for idx, label in enumerate(class_wise_labels):
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 6))

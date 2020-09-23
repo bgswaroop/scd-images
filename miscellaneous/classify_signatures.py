@@ -1,9 +1,12 @@
+import logging
 from pathlib import Path
 
 import numpy as np
-from sklearn import neighbors, preprocessing, model_selection
+from sklearn import neighbors, preprocessing, model_selection, decomposition
 
 from signature_net.sig_net_flow import SigNetFlow
+
+logger = logging.getLogger(__name__)
 
 
 class ClassifySignatures(object):
@@ -29,12 +32,12 @@ class ClassifySignatures(object):
         # standardize the data - zero mean and unit variance for each feature dimension
         scalar = preprocessing.StandardScaler()
         scalar.fit(train_sig)
-        # print(scalar.mean_, scalar.var_)
+        # logger.info(scalar.mean_, scalar.var_)
         train_sig = scalar.transform(train_sig, copy=True)
         test_sig = scalar.transform(test_sig, copy=True)
 
-        print('Num train samples: {}'.format(len(train_sig)))
-        print('Num test samples: {}'.format(len(test_sig)))
+        logger.info('Num train samples: {}'.format(len(train_sig)))
+        logger.info('Num test samples: {}'.format(len(test_sig)))
 
         accuracy = {}
         for weights in ['uniform', 'distance']:
@@ -44,8 +47,8 @@ class ClassifySignatures(object):
                 predictions = clf.predict(test_sig)
                 accuracy[n_neighbors] = sum(test_labels == predictions) / len(test_labels)
 
-            print(weights)
-            print(accuracy)
+            logger.info(weights)
+            logger.info(accuracy)
 
     @classmethod
     def knn_using_leave_one_out_cross_validation(cls):
@@ -54,16 +57,24 @@ class ClassifySignatures(object):
         :param n_folds: number of folds. If None then perform leave one out cross validation.
         :return: None
         """
-        sig_pairs = SigNetFlow.extract_signatures(config_mode='train',
-                                                  images_dir=r'D:\Data\INCIBE_dataset\source_devices')
+        sig_pairs = SigNetFlow.extract_signatures(config_mode='train', images_dir=Configure.data)
         signatures = np.array([np.array(x[0]) for x in sig_pairs])
         labels = np.array([Path(x[1]).parent.name for x in sig_pairs])
 
         # data pre-processing
-        # scalar = preprocessing.StandardScaler()
-        # scalar.fit(signatures)
-        # signatures = scalar.transform(signatures, copy=True)
+        scalar = preprocessing.StandardScaler()
+        scalar.fit(signatures)
+        signatures = scalar.transform(signatures, copy=True)
+
+        # # normalize all samples to unit l2-norm
         # signatures = preprocessing.normalize(signatures, norm='l2')
+
+        pca = decomposition.PCA(n_components=0.95, svd_solver='full')
+        signatures = pca.fit_transform(signatures)
+
+        logger.info('Num train samples: {}'.format(len(signatures) - 1))
+        logger.info('Num test samples: {}'.format(1))
+        logger.info('Feature dimensionality: {}'.format(signatures.shape[1]))
 
         distance_matrix = np.zeros((len(signatures), len(signatures)))
         for idx1, s1 in enumerate(signatures):
@@ -76,7 +87,7 @@ class ClassifySignatures(object):
 
         accuracy = {}
         for weights in ['distance', 'uniform']:
-            print(weights)
+            logger.info(weights)
 
             for n_neighbors in [3, 5, 7, 10, 15]:
                 assert n_neighbors < len(signatures), \
@@ -106,9 +117,9 @@ class ClassifySignatures(object):
                         accuracy[(weights, n_neighbors)] += 1
                 accuracy[(weights, n_neighbors)] /= len(signatures)
 
-                print('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
+                logger.info('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
 
-        print(accuracy)
+        logger.info(accuracy)
 
     @classmethod
     def knn_using_train_test_set(cls):
@@ -125,18 +136,24 @@ class ClassifySignatures(object):
         test_labels = np.array([Path(x[1]).parent.name for x in sig_pairs_test])
 
         # normalize all samples to unit l2-norm
-        # train_sig = preprocessing.normalize(train_sig, norm='l2')
-        # test_sig = preprocessing.normalize(test_sig, norm='l2')
+        train_sig = preprocessing.normalize(train_sig, norm='l2')
+        test_sig = preprocessing.normalize(test_sig, norm='l2')
 
-        # standardize the data - zero mean and unit variance for each feature dimension
-        scalar = preprocessing.StandardScaler()
-        scalar.fit(train_sig)
-        # print(scalar.mean_, scalar.var_)
-        train_sig = scalar.transform(train_sig, copy=True)
-        test_sig = scalar.transform(test_sig, copy=True)
+        # # standardize the data - zero mean and unit variance for each feature dimension
+        # scalar = preprocessing.StandardScaler()
+        # scalar.fit(train_sig)
+        # # logger.info(scalar.mean_, scalar.var_)
+        # train_sig = scalar.transform(train_sig, copy=True)
+        # test_sig = scalar.transform(test_sig, copy=True)
 
-        print('Num train samples: {}'.format(len(train_sig)))
-        print('Num test samples: {}'.format(len(test_sig)))
+        # https: // stackoverflow.com / a / 47325158 / 2709971
+        pca = decomposition.PCA(n_components=0.95, svd_solver='full')
+        train_sig = pca.fit_transform(train_sig)
+        test_sig = pca.transform(test_sig)
+
+        logger.info('Num train samples: {}'.format(len(train_sig)))
+        logger.info('Num test samples: {}'.format(len(test_sig)))
+        logger.info('Feature dimensionality: {}'.format(train_sig.shape[1]))
 
         distance_matrix = np.zeros((len(test_sig), len(train_sig)))
         for idx1, s1 in enumerate(test_sig):
@@ -146,7 +163,7 @@ class ClassifySignatures(object):
 
         accuracy = {}
         for weights in ['uniform', 'distance']:
-            print(weights)
+            logger.info(weights)
             for n_neighbors in [3, 5, 7, 10, 15]:
                 # clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
                 # clf.fit(train_sig, train_labels)
@@ -174,20 +191,19 @@ class ClassifySignatures(object):
                         accuracy[(weights, n_neighbors)] += 1
                 accuracy[(weights, n_neighbors)] /= len(test_sig)
 
-                print('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
+                logger.info('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
             #
-            # print(weights)
-            # print(accuracy)
+            # logger.info(weights)
+            # logger.info(accuracy)
 
     @classmethod
-    def sklearn_knn_using_n_fold_cross_validation(cls, n_folds=None):
+    def knn_using_n_fold_cross_validation(cls, n_folds=None):
         """
         Method to classify the signatures using KNN, performing n fold cross validation
         :param n_folds: number of folds. If None then perform leave one out cross validation.
         :return: None
         """
-        sig_pairs = SigNetFlow.extract_signatures(config_mode='train',
-                                                  images_dir=r'D:\Data\INCIBE_dataset\source_devices')
+        sig_pairs = SigNetFlow.extract_signatures(config_mode='train', images_dir=Configure.data)
         signatures = np.array([np.array(x[0]) for x in sig_pairs])
         labels = np.array([Path(x[1]).parent.name for x in sig_pairs])
 
@@ -198,10 +214,11 @@ class ClassifySignatures(object):
 
         accuracy = {}
         for weights in ['uniform', 'distance']:
-            print(weights)
+            logger.info(weights)
 
             for n_neighbors in [3, 5, 7, 10, 15]:
                 accuracy[(weights, n_neighbors)] = 0
+
                 for train_index, test_index in k_fold.split(signatures):
                     # train and test data
                     train_sig, test_sig = signatures[train_index], signatures[test_index]
@@ -222,16 +239,20 @@ class ClassifySignatures(object):
                     accuracy[(weights, n_neighbors)] += sum(test_labels == predictions)
                 accuracy[(weights, n_neighbors)] /= len(signatures)
 
-                print('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
+                logger.info('{}\t{}'.format(n_neighbors, accuracy[(weights, n_neighbors)]))
 
-        print(accuracy)
+        logger.info(accuracy)
 
 
 if __name__ == '__main__':
+    from utils.logging import SetupLogger
+    from configure import Configure
+
+    SetupLogger(Configure.runtime_dir.joinpath('scd.log'))
     try:
         # ClassifySignatures.knn_using_train_test_set()
         # ClassifySignatures.knn_using_leave_one_out_cross_validation()
-        # ClassifySignatures.knn_using_n_fold_cross_validation(n_folds=10)
-        ClassifySignatures.knn_using_train_test_set()
+        ClassifySignatures.knn_using_n_fold_cross_validation(n_folds=10)
+        # ClassifySignatures.knn_using_train_test_set()
     except Exception as e:
-        print(e)
+        logger.error(e)
