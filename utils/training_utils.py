@@ -36,7 +36,7 @@ class Utils:
                                                format(epoch, train_loss, val_loss, train_accuracy, val_accuracy)))
 
     @staticmethod
-    def get_initial_epoch(pre_trained_models_dir, model):
+    def prepare_for_training(pre_trained_models_dir, model):
         initial_epoch = 1
         history = {'epochs': [], 'learning_rate': [], 'accuracy': [], 'loss': [], 'val_accuracy': [], 'val_loss': []}
 
@@ -55,7 +55,7 @@ class Utils:
                 with open(str(filename), 'rb') as f:
                     history = pickle.load(f)
 
-        return initial_epoch, model, history
+        return initial_epoch, history, model
 
     @staticmethod
     def save_best_model(pre_trained_models_dir, destination_dir, history, name):

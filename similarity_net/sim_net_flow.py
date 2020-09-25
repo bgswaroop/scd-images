@@ -1,10 +1,14 @@
 import logging
-import time
+from time import perf_counter
 
+import numpy as np
 import torch
 
 from configure import Configure, SimNet
 from similarity_net.data import Data
+from utils.evaluation_metrics import MatrixUtils, BinaryClassificationScores
+from utils.logging import log_running_time
+from utils.torchsummary import summary
 from utils.training_utils import Utils
 from utils.visualization_utils import VisualizationUtils
 
@@ -14,46 +18,45 @@ logger = logging.getLogger(__name__)
 class SimNetFlow(object):
 
     @staticmethod
-    def train_batch(inputs, expected_outputs, threshold=0.5):
+    def train_batch(inputs, targets, threshold=0.5):
         inputs = [x.to(Configure.device) for x in inputs]
         SimNet.optimizer.zero_grad()
         outputs = SimNet.model(inputs)
-        loss = SimNet.criterion(outputs, expected_outputs.to(Configure.device))
-        # fixme:
-        # UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach()
-        # or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-        #   prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
-        prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
-        accuracy = sum(prediction == expected_outputs).item() / len(expected_outputs)
+        loss = SimNet.criterion(outputs, targets)
+        predictions = torch.as_tensor(outputs > threshold, dtype=torch.float32).to(Configure.device)
+        accuracy = torch.mean(torch.as_tensor(targets == predictions, dtype=torch.float32))
         loss.backward()
         SimNet.optimizer.step()
-        return accuracy, loss.item()
+        return accuracy.item(), loss.item()
 
     @staticmethod
     @torch.no_grad()
-    def test_batch(inputs, expected_outputs, threshold=0.5):
+    def test_batch(inputs, targets, threshold=0.5, return_predictions=False):
         inputs = [x.to(Configure.device) for x in inputs]
         outputs = SimNet.model(inputs)
-        loss = SimNet.criterion(outputs, expected_outputs.to(Configure.device))
-        prediction = torch.tensor(outputs > threshold, dtype=torch.float32)
-        accuracy = sum(prediction == expected_outputs).item() / len(expected_outputs)
-        return accuracy, loss.item()
+        loss = SimNet.criterion(outputs, targets)
+        predictions = torch.as_tensor(outputs > threshold, dtype=torch.float32).to(Configure.device)
+        accuracy = torch.mean(torch.as_tensor(targets == predictions, dtype=torch.float32))
+        if return_predictions:
+            return accuracy.item(), loss.item(), targets.cpu().numpy(), predictions.cpu().numpy()
+        else:
+            return accuracy.item(), loss.item()
 
     @classmethod
+    @log_running_time
     def train(cls):
+        summary(SimNet.model, (1024, 1024), print_fn=logger.info)
         train_loader = Data.load_data(config_mode='train')
         test_loader = Data.load_data(config_mode='test')
 
-        init_epoch, SimNet.model, history = Utils.get_initial_epoch(model=SimNet.model,
-                                                                    pre_trained_models_dir=Configure.simnet_dir)
+        init_epoch, history, SimNet.model = Utils.prepare_for_training(Configure.simnet_dir, SimNet.model)
         for epoch in range(init_epoch, SimNet.epochs + 1):
-
             # Train
             SimNet.model.train()
             train_acc, train_loss = 0, 0
-            epoch_start_time = time.perf_counter()
+            epoch_start_time = perf_counter()
             for sig_pairs, (sim_scores, _) in train_loader:
-                acc, loss = cls.train_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                acc, loss = cls.train_batch(sig_pairs, sim_scores.to(Configure.device))
                 train_acc += acc
                 train_loss += loss
 
@@ -62,13 +65,13 @@ class SimNetFlow(object):
 
             lr = SimNet.scheduler.get_last_lr()
             SimNet.scheduler.step()
-            epoch_end_time = time.perf_counter()
+            epoch_end_time = perf_counter()
 
             # Validate
             SimNet.model.eval()
             val_acc, val_loss = 0, 0
             for sig_pairs, (sim_scores, _) in test_loader:
-                acc, loss = cls.test_batch(inputs=sig_pairs, expected_outputs=sim_scores)
+                acc, loss = cls.test_batch(sig_pairs, sim_scores.to(Configure.device))
                 val_acc += acc
                 val_loss += loss
 
@@ -88,8 +91,61 @@ class SimNetFlow(object):
                               destination_dir=Configure.runtime_dir,
                               history=history, name=SimNet.name)
 
+    @classmethod
+    @log_running_time
+    def classify(cls, config_mode='test', pre_trained_model_path=None):
+        """
+        Method to classify signature pairs
+        :param config_mode: string - train / test
+        :param pre_trained_model_path: (optional) Pre-trained model path
+        :return: list of similarity scores
+        """
+        if not pre_trained_model_path:
+            pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SimNet.name))
+        SimNet.model = torch.load(pre_trained_model_path)
+
+        if config_mode == 'train':
+            data_loader = Data.load_data(config_mode=config_mode)
+        elif config_mode == 'test':
+            data_loader = Data.load_data(config_mode=config_mode)
+        else:
+            raise ValueError('Invalid config_mode')
+
+        num_batches = len(data_loader)
+        loss, acc = np.zeros(num_batches), np.zeros(num_batches)
+        ground_truths, predictions = [None] * num_batches, [None] * num_batches
+        image_paths = []
+
+        for batch_id, (input_signatures, (target_labels, img_paths)) in enumerate(data_loader):
+            loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = cls.test_batch \
+                (input_signatures, target_labels.to(Configure.device), return_predictions=True)
+            image_paths += list(zip(list(img_paths[0]), list(img_paths[1])))
+
+        logger.info(f'Test loss: {np.mean(loss)}')
+        logger.info(f'Test accuracy: {np.mean(acc)}')
+
+        ground_truths, similarity_scores = np.concatenate(ground_truths), np.concatenate(predictions)
+        np.save('similarity_scores.npy', similarity_scores)
+        np.save('ground_truths.npy', ground_truths)
+
+        VisualizationUtils.plot_roc(ground_truths, similarity_scores, Configure.simnet_dir)
+        threshold = VisualizationUtils.plot_scores_with_thresholds(ground_truths, similarity_scores,
+                                                                   Configure.simnet_dir)
+
+        logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
+        predictions = np.where(similarity_scores > threshold, 1, 0)
+        VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold,
+                                                               Configure.simnet_dir)
+
+        similarity_scores = MatrixUtils(test_image_paths=image_paths, predictions=predictions,
+                                        train_images_dir=Configure.train_data)
+        similarity_scores.print()
+        scores = BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions)
+        scores.print()
+
+        VisualizationUtils.plot_similarity_matrix(similarity_scores.similarity_matrix.astype(np.float),
+                                                  Configure.simnet_dir)
+
 
 if __name__ == '__main__':
-    from utils.torchsummary import summary
-    summary(SimNet.model, (38400, 38400), logger.info)
     SimNetFlow.train()

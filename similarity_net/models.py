@@ -5,7 +5,7 @@ import torch
 class SimilarityNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(in_features=38400, out_features=64)
+        self.fc1 = nn.Linear(in_features=1024, out_features=64)
         self.bn1 = nn.BatchNorm1d(num_features=64)
         self.fc2 = nn.Linear(in_features=64*3, out_features=64)
         self.bn2 = nn.BatchNorm1d(num_features=64)

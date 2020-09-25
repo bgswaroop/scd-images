@@ -50,13 +50,20 @@ def log_running_time(func):
     """
     from functools import wraps
     import logging
+    from time import perf_counter
     logger = logging.getLogger(func.__module__)
 
     @wraps(func)
     def inner(*args, **kwargs):
-        logger.info(f'Started running method {func.__name__}')
+        logger.info(f'Started running {func.__name__}')
+        start = perf_counter()
         output = func(*args, **kwargs)
-        logger.info(f'Finished running method {func.__name__}')
+        end = perf_counter()
+        time_in_sec = end - start
+        if time_in_sec < 60:
+            logger.info(f"Finished running {func.__name__} in {format(time_in_sec, '.2f')} sec")
+        else:
+            logger.info(f"Finished running {func.__name__} in {format(time_in_sec / 60., '.2f')} min")
         return output
-    return inner
 
+    return inner

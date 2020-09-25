@@ -1,6 +1,7 @@
 import logging
-import time
+from time import perf_counter
 
+import numpy as np
 import torch
 
 from configure import Configure, SigNet
@@ -15,32 +16,33 @@ logger = logging.getLogger(__name__)
 class SigNetFlow(object):
 
     @staticmethod
-    def train_batch(inputs, expected_outputs):
-        inputs = inputs.to(Configure.device)
+    def train_batch(inputs, targets):
         SigNet.optimizer.zero_grad()
         outputs = SigNet.model(inputs)
-        loss = SigNet.criterion(outputs, expected_outputs.to(Configure.device))
+        loss = SigNet.criterion(outputs, targets)
         loss.backward()
         SigNet.optimizer.step()
 
         predictions = torch.max(outputs, dim=1).indices
-        target = torch.max(expected_outputs.to(Configure.device), dim=1).indices
-        accuracy = torch.sum(target == predictions) / torch.tensor(target.shape[0], dtype=torch.float32)
+        ground_truths = torch.max(targets, dim=1).indices
+        accuracy = torch.mean(torch.tensor(ground_truths == predictions, dtype=torch.float32))
 
         return loss.item(), accuracy.item()
 
     @staticmethod
     @torch.no_grad()
-    def test_batch(inputs, expected_outputs):
-        inputs = inputs.to(Configure.device)
+    def test_batch(inputs, targets, return_predictions=False):
         outputs = SigNet.model(inputs)
-        loss = SigNet.criterion(outputs, expected_outputs.to(Configure.device))
+        loss = SigNet.criterion(outputs, targets)
 
         predictions = torch.max(outputs, dim=1).indices
-        target = torch.max(expected_outputs.to(Configure.device), dim=1).indices
-        accuracy = torch.sum(target == predictions) / torch.tensor(target.shape[0], dtype=torch.float32)
+        ground_truths = torch.max(targets, dim=1).indices
+        accuracy = torch.mean(torch.tensor(ground_truths == predictions, dtype=torch.float32))
 
-        return loss.item(), accuracy.item()
+        if return_predictions:
+            return loss.item(), accuracy.item(), ground_truths.cpu().numpy(), predictions.cpu().numpy()
+        else:
+            return loss.item(), accuracy.item()
 
     @classmethod
     @log_running_time
@@ -49,38 +51,30 @@ class SigNetFlow(object):
         train_loader = Data.load_data(dataset=Configure.train_data, config_mode='train')
         test_loader = Data.load_data(dataset=Configure.test_data, config_mode='test')
 
-        init_epoch, SigNet.model, history = Utils.get_initial_epoch(model=SigNet.model,
-                                                                    pre_trained_models_dir=Configure.signet_dir)
+        init_epoch, history, model = Utils.prepare_for_training(Configure.signet_dir, SigNet.model)
         for epoch in range(init_epoch, SigNet.epochs + 1):
-
             # Train
             SigNet.model.train()
-            train_loss, train_acc = 0, 0
-            epoch_start_time = time.perf_counter()
-            for input_images, (target_labels, _) in train_loader:
-                input_images = input_images.to(Configure.device)
-                loss, acc = cls.train_batch(inputs=input_images, expected_outputs=target_labels)
-                train_loss += loss
-                train_acc += acc
+            num_batches = len(train_loader)
+            loss, acc = np.zeros(num_batches), np.zeros(num_batches)
 
-            train_loss = train_loss / len(train_loader)
-            train_acc = train_acc / len(train_loader)
+            epoch_start_time = perf_counter()
+            for i, (input_images, (target_labels, _)) in enumerate(train_loader):
+                loss[i], acc[i] = cls.train_batch(input_images.to(Configure.device), target_labels.to(Configure.device))
 
+            train_acc, train_loss = np.mean(acc), np.mean(loss)
             lr = SigNet.scheduler.get_last_lr()
             SigNet.scheduler.step()
-            epoch_end_time = time.perf_counter()
+            epoch_end_time = perf_counter()
 
             # Validate
             SigNet.model.eval()
-            val_loss, val_acc = 0, 0
-            for input_images, (target_labels, _) in test_loader:
-                input_images = input_images.to(Configure.device)
-                loss, acc = cls.test_batch(inputs=input_images, expected_outputs=target_labels)
-                val_loss += loss
-                val_acc += acc
+            num_batches = len(test_loader)
+            loss, acc = np.zeros(num_batches), np.zeros(num_batches)
+            for i, (input_images, (target_labels, _)) in enumerate(test_loader):
+                loss[i], acc[i] = cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device))
 
-            val_loss = val_loss / len(test_loader)
-            val_acc = val_acc / len(test_loader)
+            val_acc, val_loss = np.mean(acc), np.mean(loss)
 
             # Log epoch statistics
             Utils.update_history(history, epoch, train_loss, val_loss, train_acc, val_acc, lr, Configure.signet_dir)
@@ -95,6 +89,7 @@ class SigNetFlow(object):
                               history=history, name=SigNet.name)
 
     @classmethod
+    @log_running_time
     def extract_signatures(cls, config_mode, images_dir=None, pre_trained_model_path=None):
         """
         Method to extract signatures and labels
@@ -123,11 +118,50 @@ class SigNetFlow(object):
             input_images = input_images.to(Configure.device)
             features = SigNet.model.extract_features(input_images).to(torch.device("cpu")).detach()
             signatures += list(zip(features, input_img_paths))
+
+        logger.info(f'Number of extracted signatures: {len(signatures)}')
         return signatures
+
+    @classmethod
+    @log_running_time
+    def classify(cls, config_mode='test', pre_trained_model_path=None):
+        """
+        Method to extract signatures and labels
+        :param config_mode: string - train / test
+        :param pre_trained_model_path: (optional) Pre-trained model path
+        :return: list of labelled signatures
+        """
+        if not pre_trained_model_path:
+            pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SigNet.name))
+        SigNet.model = torch.load(pre_trained_model_path)
+
+        if config_mode == 'train':
+            data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+        elif config_mode == 'test':
+            data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
+        else:
+            raise ValueError('Invalid config_mode')
+
+        num_batches = len(data_loader)
+        loss, acc = np.zeros(num_batches), np.zeros(num_batches)
+        ground_truths, predictions = [None] * num_batches, [None] * num_batches
+
+        for batch_id, (input_images, (target_labels, _)) in enumerate(data_loader):
+            loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = \
+                cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device),
+                               return_predictions=True)
+
+        logger.info(f'Test loss: {np.mean(loss)}')
+        logger.info(f'Test accuracy: {np.mean(acc)}')
+
+        ground_truths, predictions = np.concatenate(ground_truths), np.concatenate(predictions)
+        VisualizationUtils.plot_confusion_matrix(ground_truths, predictions,
+                                                 one_hot=False, save_to_dir=Configure.signet_dir)
 
 
 if __name__ == '__main__':
     from utils.torchsummary import summary
+
     summary(SigNet.model, (3, 320, 480), logger.info)
     # SigNetFlow.extract_signatures(config_mode='train')
     # ae_predictions_train, ae_predictions_test = VisualizationUtils.visualize_ae_input_output_pairs()

@@ -10,8 +10,8 @@ from utils.cost_functions import CategoricalCrossEntropyLoss
 
 class Configure(object):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_data = r'D:\Data\Dresden\source_devices\natural_patches'
-    test_data = r'D:\Data\Dresden\source_devices\natural_patches'
+    train_data = r'D:\Data\Dresden\source_devices\nat_patches_mini'
+    test_data = r'D:\Data\Dresden\source_devices\nat_patches_mini'
     data = r'D:\Data\INCIBE_dataset\source_devices'
     # train_data = r'D:\Data\INCIBE_dataset\train'
     # test_data = r'D:\Data\INCIBE_dataset\test'
@@ -40,7 +40,7 @@ class SigNet(object):
     criterion = CategoricalCrossEntropyLoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.90, last_epoch=-1)
-    epochs = 9
+    epochs = 2
 
 
 class SimNet(object):
@@ -50,4 +50,4 @@ class SimNet(object):
     criterion = nn.BCELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 6
+    epochs = 10

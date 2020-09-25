@@ -16,12 +16,14 @@ def run_flow():
     """
 
     # Signature Net
-    SigNetFlow.train()
+    # SigNetFlow.train()
+    # SigNetFlow.classify()
     # Utils.visualize_ae_input_output_pairs()
     # Utils.save_avg_fourier_images()
 
     # Similarity Net
     SimNetFlow.train()
+    SimNetFlow.classify()
 
 
 if __name__ == '__main__':
@@ -30,3 +32,4 @@ if __name__ == '__main__':
         run_flow()
     except Exception as e:
         logger.error(e)
+        raise e

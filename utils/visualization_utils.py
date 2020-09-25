@@ -3,6 +3,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sn
+import sklearn.metrics
 
 from utils.training_utils import Utils
 
@@ -20,7 +22,7 @@ class VisualizationUtils:
         data_root = Path(dataset_dir)
         class_list = [f for f in data_root.glob("*")]
         class_wise_distribution = np.zeros(len(class_list))
-        class_names = [None] * len(class_list)
+        class_names = [''] * len(class_list)
         for idx, item in enumerate(class_list):
             class_wise_distribution[idx] = len([f for f in item.glob("*")])
             class_names[idx] = item.stem
@@ -110,11 +112,213 @@ class VisualizationUtils:
         VisualizationUtils.plot_training_history(save_to_dir=save_to_dir, history=history)
         VisualizationUtils.plot_learning_rate(save_to_dir=save_to_dir, history=history)
 
+    @classmethod
+    def plot_confusion_matrix(cls, ground_truth_labels, predictions, one_hot, save_to_dir):
+        import sklearn.metrics
+        import pandas as pd
+        import seaborn as sn
 
-if __name__ == "__main__":
-    utils = VisualizationUtils()
-    # utils.plot_class_wise_data_distribution(
-    #     dataset_dir=None,
-    #     save_to_dir=None
-    # )
-    # utils.save_avg_fourier_images()
+        if one_hot:
+            ground_truth_labels = [np.argmax(x) for x in ground_truth_labels]
+            predictions = [np.argmax(x) for x in predictions]
+
+        cm_matrix = sklearn.metrics.confusion_matrix(ground_truth_labels, predictions)
+
+        # Creating labels for the plot
+        x_ticks = [''] * len(cm_matrix)
+        y_ticks = [''] * len(cm_matrix)
+        for i in np.arange(0, len(cm_matrix), 2):
+            x_ticks[i] = str(i + 1)
+            y_ticks[i] = str(i + 1)
+        num_classes = max(max(ground_truth_labels), max(predictions)) + 1
+        df_cm = pd.DataFrame(cm_matrix, range(1, num_classes + 1), range(1, num_classes + 1))
+        plt.figure(figsize=(30, 20))
+        sn.set(font_scale=2.5)  # for label size
+        ax = sn.heatmap(df_cm,
+                        annot=True,
+                        xticklabels=x_ticks, yticklabels=y_ticks,
+                        annot_kws={"size": 16},
+                        square=True,
+                        vmin=0, vmax=cm_matrix.max(),
+                        cbar_kws={'label': 'No. of images'})  # font size
+
+        # This is to fix an issue with matplotlib==3.1.1
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+        plt.xticks(rotation=0)
+        plt.yticks(rotation=0)
+        plt.title("Confusion Matrix - Signature Net", pad=30)
+        plt.ylabel('Ground Truth', labelpad=30)
+        plt.xlabel('Predictions', labelpad=30)
+        plt.savefig(save_to_dir.joinpath("sig_net_test_cm.png"))
+        plt.show()
+        plt.close()
+
+        norm_cm = cm_matrix / (cm_matrix.sum(1).repeat(len(cm_matrix)).reshape(cm_matrix.shape))
+        df_cm = pd.DataFrame(norm_cm, range(1, num_classes + 1), range(1, num_classes + 1))
+        plt.figure(figsize=(30, 20))
+        sn.set(font_scale=2.5)  # for label size
+        ax = sn.heatmap(df_cm,
+                        xticklabels=x_ticks, yticklabels=y_ticks,
+                        square=True,
+                        vmin=0, vmax=1,
+                        cbar_kws={'label': 'Normalized num images per class'})  # font size
+        # This is to fix an issue with matplotlib==3.1.1
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+        plt.xticks(rotation=0)
+        plt.yticks(rotation=0)
+        plt.title("Confusion Matrix (Normalized) - Signature Net", pad=30)
+        plt.ylabel('Ground Truth', labelpad=30)
+        plt.xlabel('Predictions', labelpad=30)
+        plt.savefig(save_to_dir.joinpath("sig_net_test_cm_normalized.png"))
+
+        plt.show()
+        plt.close()
+
+    # https://github.com/jeffheaton/t81_558_deep_learning/blob/47f5b87342fab61e19c0ee3ff46a3930cca41b1e/t81_558_class_04_2_multi_class.ipynb
+    @classmethod
+    def plot_roc(cls, ground_truths, predictions, save_to_dir):
+        fpr, tpr, _ = sklearn.metrics.roc_curve(ground_truths, predictions)
+        roc_auc = sklearn.metrics.auc(fpr, tpr)
+        print(roc_auc)
+        plt.figure()
+        plt.plot(fpr, tpr, label='+ve label for same sources (area = %0.3f)' % roc_auc)
+
+        # fpr, tpr, _ = sklearn.metrics.roc_curve(ground_truth, predictions, pos_label=0)
+        # roc_auc = sklearn.metrics.auc(fpr, tpr)
+        # plt.plot(fpr, tpr, label='+ve label for different sources (area = %0.3f)' % roc_auc)
+
+        plt.plot([0, 1], [0, 1], 'k--', label='No Skill')
+        plt.xlim([-0.05, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic (ROC)')
+        plt.legend(loc="lower right")
+
+        plt.savefig(save_to_dir.joinpath("roc_plot.png"))
+        plt.show()
+        plt.close()
+
+    @classmethod
+    def plot_scores_with_thresholds(cls, ground_truths, predictions, save_to_dir):
+        f1_scores = []
+        mcc_scores = []
+        num_thresholds = 100.0
+        thresholds = list(np.arange(start=min(predictions),
+                                    stop=max(predictions),
+                                    step=(max(predictions) - min(predictions)) / num_thresholds))
+        for th in thresholds:
+            pred = (predictions >= th) * 1
+            f1_scores.append(sklearn.metrics.f1_score(ground_truths, pred, pos_label=1))
+            mcc_scores.append(sklearn.metrics.matthews_corrcoef(ground_truths, pred))
+        plt.figure()
+        plt.plot(thresholds, f1_scores, label='F1 score')
+        plt.plot(thresholds, mcc_scores, label='MCC score')
+        plt.xlim([min(thresholds), max(thresholds)])
+        plt.ylim([min(f1_scores + mcc_scores) - 0.05, 1.05])
+
+        hist_bins = np.histogram(ground_truths, 2)
+
+        rounded_scores = np.round(f1_scores, 2)
+        index_max_scores = np.where(np.max(rounded_scores) == rounded_scores)[0]
+        f1_based_threshold = thresholds[index_max_scores[len(index_max_scores) // 2]]
+        print('Max f1 score is at threshold : {}'.format(f1_based_threshold))
+        plt.axvline(x=f1_based_threshold, label='Max F1-based threshold', linestyle='--', alpha=0.40, c='r')
+
+        rounded_scores = np.round(mcc_scores, 2)
+        index_max_scores = np.where(np.max(rounded_scores) == rounded_scores)[0]
+        mcc_based_threshold = thresholds[index_max_scores[len(index_max_scores) // 2]]
+        print('Max mcc score is at threshold : {}'.format(mcc_based_threshold))
+        plt.axvline(x=mcc_based_threshold, label='Max MCC-based threshold', linestyle='--', alpha=0.40, c='g')
+
+        plt.title('Performance on test data ' +
+                  '\n {} same sources '.format(hist_bins[0][1]) +
+                  '& {} different sources'.format(hist_bins[0][0]))
+        plt.xlabel('Thresholds')
+        plt.ylabel('Scores')
+        plt.legend()  # loc="lower right"
+
+        plt.savefig(save_to_dir.joinpath("scores_with_thresholds.png"))
+        plt.show()
+        plt.close()
+
+        return mcc_based_threshold
+
+    @classmethod
+    def plot_similarity_matrix(cls, sim_matrix, save_to_dir):
+
+        # Creating labels for the plot
+        x_ticks = [''] * len(sim_matrix)
+        y_ticks = [''] * len(sim_matrix)
+        for i in np.arange(0, len(sim_matrix), 2):
+            x_ticks[i] = str(i + 1)
+            y_ticks[i] = str(i + 1)
+
+        # df_cm = pd.DataFrame(sim_matrix, source_cameras, source_cameras)
+        # df_cm = pd.DataFrame(sim_matrix, x_ticks, y_ticks)
+        plt.figure(figsize=(30, 20))
+        sn.set(font_scale=3.5)  # for label size
+        ax = sn.heatmap(sim_matrix, square=True,
+                        xticklabels=x_ticks, yticklabels=y_ticks,
+                        vmin=0, vmax=1,
+                        cbar_kws={'label': 'Similarity Score'})  # font size
+
+        # This is to fix an issue with matplotlib==3.1.1
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+
+        plt.xticks(rotation=0)
+        plt.yticks(rotation=0)
+
+        plt.title("Similarity Matrix")
+        plt.xlabel('Camera Device 1')
+        plt.ylabel('Camera Device 2')
+
+        plt.savefig(save_to_dir.joinpath("similarity_matrix.png"))
+        plt.show()
+        plt.close()
+
+    @classmethod
+    def plot_similarity_scores_distribution(cls, similarity_scores, ground_truths, threshold, save_to_dir):
+
+        positive_samples = np.where(ground_truths == 1)
+        negative_samples = np.where(ground_truths == 0)
+        positive_scores, negative_scores = similarity_scores[positive_samples], similarity_scores[negative_samples]
+
+        num_bins = 20
+        _, bin_edges = np.histogram(similarity_scores, bins=num_bins)
+        positive_score_distribution, _ = np.histogram(positive_scores, bins=bin_edges)
+        negative_score_distribution, _ = np.histogram(negative_scores, bins=bin_edges)
+
+        num_positive_samples = np.sum(positive_score_distribution)
+        num_negative_samples = np.sum(negative_score_distribution)
+
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        bar_width = 0.4 * (bin_edges[-1] - bin_edges[0]) / num_bins
+        plt.figure()
+        plt.bar(bin_centers - bar_width / 2, positive_score_distribution, width=bar_width, color='#444444',
+                label='+ve class (num samples {})'.format(num_positive_samples), alpha=0.7)
+        plt.bar(bin_centers + bar_width / 2, negative_score_distribution, width=bar_width, color='#e5ae38',
+                label='-ve class (num samples {})'.format(num_negative_samples), alpha=0.7)
+        plt.axvline(x=threshold, label='Selected threshold', linestyle='--', alpha=0.70, color='#000000')
+
+        # Describe plot attributes
+        plt.title('Similarity scores distribution')
+        plt.xlabel('Similarity Scores')
+        plt.ylabel('Count (Log Scale)')
+        plt.yscale('log')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(save_to_dir.joinpath("scores_distribution.png"))
+        plt.show()
+        plt.close()
+
+        if __name__ == "__main__":
+            utils = VisualizationUtils()
+            # utils.plot_class_wise_data_distribution(
+            #     dataset_dir=None,
+            #     save_to_dir=None
+            # )
+            # utils.save_avg_fourier_images()

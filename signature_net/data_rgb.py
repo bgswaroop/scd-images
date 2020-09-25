@@ -24,6 +24,7 @@ class Dataset(torch.utils.data.Dataset):
         self.labels = labels
         self.list_ids = list_ids
         self.transform = transform
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def __len__(self):
         """Denotes the total number of samples"""
