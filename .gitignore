@@ -3,3 +3,4 @@
 /torch_dataset/
 /.idea/
 /__pycache__/
+/slurm-*.out

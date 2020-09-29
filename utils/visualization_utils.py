@@ -41,7 +41,10 @@ class VisualizationUtils:
         plt.xlabel('No. of training images')
         plt.tight_layout()
         plt.savefig(str(Path(save_to_dir).joinpath("data_distribution.png")))
+        plt.clf()
+        plt.cla()
         plt.close()
+
 
     @staticmethod
     def plot_training_history(save_to_dir, history):
@@ -72,6 +75,8 @@ class VisualizationUtils:
         plt.ylabel('accuracy')
         plt.legend()
         plt.savefig(acc_filename)
+        plt.clf()
+        plt.cla()
         plt.close()
 
         plt.figure()
@@ -88,6 +93,8 @@ class VisualizationUtils:
         plt.ylabel('loss')
         plt.legend()
         plt.savefig(loss_filename)
+        plt.clf()
+        plt.cla()
         plt.close()
 
     @classmethod
@@ -105,6 +112,8 @@ class VisualizationUtils:
         plt.ylabel('learning rate')
         plt.legend()
         plt.savefig(filename)
+        plt.clf()
+        plt.cla()
         plt.close()
 
     @staticmethod
@@ -151,7 +160,9 @@ class VisualizationUtils:
         plt.ylabel('Ground Truth', labelpad=30)
         plt.xlabel('Predictions', labelpad=30)
         plt.savefig(save_to_dir.joinpath("sig_net_test_cm.png"))
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
         norm_cm = cm_matrix / (cm_matrix.sum(1).repeat(len(cm_matrix)).reshape(cm_matrix.shape))
@@ -164,8 +175,8 @@ class VisualizationUtils:
                         vmin=0, vmax=1,
                         cbar_kws={'label': 'Normalized num images per class'})  # font size
         # This is to fix an issue with matplotlib==3.1.1
-        bottom, top = ax.get_ylim()
-        ax.set_ylim(bottom + 0.5, top - 0.5)
+        # bottom, top = ax.get_ylim()
+        # ax.set_ylim(bottom + 0.5, top - 0.5)
         plt.xticks(rotation=0)
         plt.yticks(rotation=0)
         plt.title("Confusion Matrix (Normalized) - Signature Net", pad=30)
@@ -173,7 +184,9 @@ class VisualizationUtils:
         plt.xlabel('Predictions', labelpad=30)
         plt.savefig(save_to_dir.joinpath("sig_net_test_cm_normalized.png"))
 
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
     # https://github.com/jeffheaton/t81_558_deep_learning/blob/47f5b87342fab61e19c0ee3ff46a3930cca41b1e/t81_558_class_04_2_multi_class.ipynb
@@ -198,7 +211,9 @@ class VisualizationUtils:
         plt.legend(loc="lower right")
 
         plt.savefig(save_to_dir.joinpath("roc_plot.png"))
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
     @classmethod
@@ -241,7 +256,9 @@ class VisualizationUtils:
         plt.legend()  # loc="lower right"
 
         plt.savefig(save_to_dir.joinpath("scores_with_thresholds.png"))
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
         return mcc_based_threshold
@@ -266,8 +283,8 @@ class VisualizationUtils:
                         cbar_kws={'label': 'Similarity Score'})  # font size
 
         # This is to fix an issue with matplotlib==3.1.1
-        bottom, top = ax.get_ylim()
-        ax.set_ylim(bottom + 0.5, top - 0.5)
+        # bottom, top = ax.get_ylim()
+        # ax.set_ylim(bottom + 0.5, top - 0.5)
 
         plt.xticks(rotation=0)
         plt.yticks(rotation=0)
@@ -277,7 +294,9 @@ class VisualizationUtils:
         plt.ylabel('Camera Device 2')
 
         plt.savefig(save_to_dir.joinpath("similarity_matrix.png"))
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
     @classmethod
@@ -312,7 +331,9 @@ class VisualizationUtils:
         plt.legend()
         plt.tight_layout()
         plt.savefig(save_to_dir.joinpath("scores_distribution.png"))
-        plt.show()
+        # plt.show()
+        plt.clf()
+        plt.cla()
         plt.close()
 
         if __name__ == "__main__":

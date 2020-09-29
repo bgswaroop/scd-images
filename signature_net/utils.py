@@ -1,7 +1,6 @@
-import pickle
+import random
 
 import torch
-import random
 from matplotlib import pyplot as plt
 
 from configure import Configure, SigNet
@@ -18,19 +17,11 @@ class Utils(object):
         with open(runtime_dir.joinpath('{}.pt'.format(SigNet.name)), 'rb') as f:
             SigNet.model = torch.load(f)
 
-        # load the data
         train_loader = Data.load_data_for_visualization(dataset=Configure.train_data, config_mode='train')
-        # test_loader = Data.load_data_for_visualization(dataset=Configure.test_data, config_mode='test')
 
         # extract the input output pairs
         SigNet.model.eval()
         with torch.no_grad():
-            # predictions_filename = runtime_dir.joinpath('ae_predictions_train.pkl')
-            # if predictions_filename.exists():
-            #     with open(predictions_filename, 'rb') as f:
-            #         ae_predictions_train = pickle.load(f)
-            # else:
-
             count = 0
             ae_predictions_train = []
             for input_image, (target_image, _) in train_loader:
@@ -45,28 +36,6 @@ class Utils(object):
                 count += 1
                 if count == 10:
                     break
-
-            #     with open(predictions_filename, 'wb+') as f:
-            #         pickle.dump(ae_predictions_train, f)
-            #
-            # predictions_filename = runtime_dir.joinpath('ae_predictions_test.pkl')
-            # if predictions_filename.exists():
-            #     with open(predictions_filename, 'rb') as f:
-            #         ae_predictions_test = pickle.load(f)
-            # else:
-            #     ae_predictions_test = []
-            #     for input_image, (target_image, _) in test_loader:
-            #         inputs = input_image.to(Configure.device)
-            #         outputs = SigNet.model(inputs)
-            #         loss = SigNet.criterion(outputs, target_image.to(Configure.device)).cpu().item()
-            #
-            #         input_img = inputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-            #         output_img = outputs.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-            #         target_img = target_image.view(input_image.shape)[0].cpu().numpy().transpose((1, 2, 0))
-            #         ae_predictions_test.append(AE_Sample(loss, input_img, output_img, target_img))
-            #
-            #     with open(predictions_filename, 'wb+') as f:
-            #         pickle.dump(ae_predictions_test, f)
 
         save_to_dir = Configure.runtime_dir.joinpath('sample_ae_pairs')
         save_to_dir.mkdir(parents=True, exist_ok=True)
@@ -92,9 +61,10 @@ class Utils(object):
             st.set_y(0.85)
             fig.subplots_adjust(top=0.85)
 
-            # plt.title()
             plt.tight_layout()
-            plt.show()
+            # plt.show()
+            plt.clf()
+            plt.cla()
             plt.close()
 
         return ae_predictions_train
@@ -123,5 +93,7 @@ class Utils(object):
 
             # plt.title()
             plt.tight_layout()
-            plt.show()
+            # plt.show()
+            plt.clf()
+            plt.cla()
             plt.close()

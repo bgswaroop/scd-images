@@ -89,7 +89,7 @@ class Score:
         self.compute_f1_score()
         self.compute_mcc()
 
-    def print(self, print_func=logger.info):
+    def log_scores(self, print_func=logger.info):
         print_func("------------------- Global Metrics ignoring duplicate --------------------")
         print_func("True Positives     : {}".format(self.tp))
         print_func("True Negatives     : {}".format(self.tn))
@@ -158,9 +158,8 @@ class BinaryClassificationScores(Score):
 
     def __init__(self, ground_truths, predictions):
         super().__init__()
-        # todo: Perform check - numpy arrays must contain either 0s or 1s
-        self.ground_truths = ground_truths[:, 0]
-        self.predictions = predictions[:, 0]
+        self.ground_truths = ground_truths
+        self.predictions = predictions
 
         self.evaluate_all_metrics()
 
@@ -177,30 +176,35 @@ class BinaryClassificationScores(Score):
                 "false_negative": self.fn}
 
 
-class MultinomialClassificationScores():
+class MultinomialClassificationScores(Score):
+    def __init__(self, ground_truths, predictions, one_hot):
+        super().__init__()
 
-    def __init__(self, ground_truths, predictions):
-        # todo: Perform check - numpy arrays must contain either 0s or 1s
-        self.ground_truths = [np.argmax(x) for x in ground_truths]
-        self.predictions = [np.argmax(x) for x in predictions]
+        if one_hot:
+            self.ground_truths = [np.argmax(x) for x in ground_truths]
+            self.predictions = [np.argmax(x) for x in predictions]
+        else:
+            self.ground_truths = ground_truths
+            self.predictions = predictions
+        self.compute_accuracy()
 
     def compute_accuracy(self):
-        return sklearn.metrics.accuracy_score(self.ground_truths, self.predictions)
+        self.accuracy = sklearn.metrics.accuracy_score(self.ground_truths, self.predictions)
 
     def compute_confusion_matrix(self):
         return sklearn.metrics.confusion_matrix(self.ground_truths, self.predictions)
 
 
-class MatrixUtils:
-    def __init__(self, test_image_paths, predictions, train_images_dir):
+class ScoreUtils:
+    def __init__(self, source_device_labels, predictions, camera_names):
         self.ground_truth_count_matrix = None
         self.true_prediction_count_matrix = None
         self.accuracy_matrix = None
         self.similarity_matrix = None
-        self.camera_names = [Path(x).name for x in sorted(Path(train_images_dir).glob('*'))]
+        self.camera_names = camera_names
         self.class_wise_scores = None
         self.global_scores = {}
-        self.source_device_labels = [(Path(x[0]).parent.name, Path(x[1]).parent.name) for x in test_image_paths]
+        self.source_device_labels = source_device_labels
         self.predictions = predictions
         self.evaluate_all_metrics()
 
@@ -306,7 +310,7 @@ class MatrixUtils:
         pd.options.display.float_format = '{:,.2f}'.format
         return pd_array.to_string()
 
-    def print(self, print_func=logger.info):
+    def log_scores(self, print_func=logger.info):
         print_func("Cameras List : \n\n{}\n".format(
             self.print_numpy_array_with_index(self.camera_names)
         ))

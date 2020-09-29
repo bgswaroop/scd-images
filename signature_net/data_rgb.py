@@ -57,7 +57,7 @@ class Data(object):
         :return: a torch dataset
         """
         if Path(image_paths).is_dir():
-            image_paths = list(Path(image_paths).glob('*/*.jpg'))
+            image_paths = list(Path(image_paths).glob('*/*'))
 
         class_labels = cls.compute_one_hot_labels(dataset=image_paths)
         img_labels = {x: (y, str(x)) for x, y in zip(image_paths, class_labels)}
@@ -70,9 +70,9 @@ class Data(object):
         dataset = cls.prepare_torch_dataset(dataset)
         # Prepare for processing
         if config_mode == 'train':
-            return torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
         elif config_mode == 'test':
-            return torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False, num_workers=4)
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):

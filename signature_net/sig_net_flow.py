@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from time import perf_counter
 
 import numpy as np
@@ -9,6 +10,7 @@ from signature_net.data_rgb import Data
 from utils.logging import log_running_time
 from utils.training_utils import Utils
 from utils.visualization_utils import VisualizationUtils
+from utils.evaluation_metrics import MultinomialClassificationScores
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ class SigNetFlow(object):
 
         predictions = torch.max(outputs, dim=1).indices
         ground_truths = torch.max(targets, dim=1).indices
-        accuracy = torch.mean(torch.tensor(ground_truths == predictions, dtype=torch.float32))
+        accuracy = torch.mean(torch.as_tensor(ground_truths == predictions, dtype=torch.float32))
 
         return loss.item(), accuracy.item()
 
@@ -37,7 +39,7 @@ class SigNetFlow(object):
 
         predictions = torch.max(outputs, dim=1).indices
         ground_truths = torch.max(targets, dim=1).indices
-        accuracy = torch.mean(torch.tensor(ground_truths == predictions, dtype=torch.float32))
+        accuracy = torch.mean(torch.as_tensor(ground_truths == predictions, dtype=torch.float32))
 
         if return_predictions:
             return loss.item(), accuracy.item(), ground_truths.cpu().numpy(), predictions.cpu().numpy()
@@ -137,26 +139,50 @@ class SigNetFlow(object):
 
         if config_mode == 'train':
             data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+            devices_list = list(sorted([x.name for x in Path(Configure.train_data).glob('*')]))
         elif config_mode == 'test':
             data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
+            devices_list = list(sorted([x.name for x in Path(Configure.test_data).glob('*')]))
         else:
             raise ValueError('Invalid config_mode')
 
         num_batches = len(data_loader)
         loss, acc = np.zeros(num_batches), np.zeros(num_batches)
         ground_truths, predictions = [None] * num_batches, [None] * num_batches
+        ground_truth_img_paths = []
 
-        for batch_id, (input_images, (target_labels, _)) in enumerate(data_loader):
+        for batch_id, (input_images, (target_labels, img_paths)) in enumerate(data_loader):
             loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = \
                 cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device),
                                return_predictions=True)
+            ground_truth_img_paths += img_paths
 
         logger.info(f'Test loss: {np.mean(loss)}')
         logger.info(f'Test accuracy: {np.mean(acc)}')
 
         ground_truths, predictions = np.concatenate(ground_truths), np.concatenate(predictions)
+
+        MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
         VisualizationUtils.plot_confusion_matrix(ground_truths, predictions,
                                                  one_hot=False, save_to_dir=Configure.signet_dir)
+
+        # Compute model level scores
+        # Combine device-wise predictions to model-level predictions
+        # Warning: The following code assumes that the device folder name is as: <camera_model>_<device_index>
+        # Note that the last two characters of device folder name must uniquely identify the device for a specific
+        # camera model
+        logger.info('Computing model level statistics')
+        results_dir = Configure.signet_dir.joinpath('model_level')
+        results_dir.mkdir(exist_ok=True, parents=True)
+        models_list = list(sorted(set([x[:-2] for x in devices_list])))
+        device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
+
+        ground_truths = [device_to_model_map[x] for x in ground_truths]
+        predictions = [device_to_model_map[x] for x in predictions]
+
+        MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
+        VisualizationUtils.plot_confusion_matrix(ground_truths, predictions, one_hot=False,
+                                                 save_to_dir=results_dir)
 
 
 if __name__ == '__main__':

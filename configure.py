@@ -10,13 +10,12 @@ from utils.cost_functions import CategoricalCrossEntropyLoss
 
 class Configure(object):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_data = r'D:\Data\Dresden\source_devices\nat_patches_mini'
-    test_data = r'D:\Data\Dresden\source_devices\nat_patches_mini'
+    train_data = r'/data/p288722/dresden/train/nat_patches_bal_kmkd_1/'
+    test_data = r'/data/p288722/dresden/test/nat_patches_bal_kmkd_1/'
     data = r'D:\Data\INCIBE_dataset\source_devices'
-    # train_data = r'D:\Data\INCIBE_dataset\train'
-    # test_data = r'D:\Data\INCIBE_dataset\test'
 
-    runtime_dir = Path(__file__).parent.absolute().joinpath('runtime_dir_scd')
+    # runtime_dir = Path(__file__).parent.absolute().joinpath('runtime_dir_scd')
+    runtime_dir = Path(r'/scratch/p288722/runtime_data/scd_pytorch/dresden_nat_patches')
 
     signet_dir = runtime_dir.joinpath('signature_net')
     simnet_dir = runtime_dir.joinpath('similarity_net')
@@ -35,12 +34,12 @@ class SigNet(object):
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
     # epochs = 9
 
-    model = SignatureNet1(num_classes=2).to(Configure.device)
+    model = SignatureNet1(num_classes=58).to(Configure.device)
     optimizer = optim.SGD(model.parameters(), lr=1e-1, momentum=0.80, weight_decay=0.0005)
     criterion = CategoricalCrossEntropyLoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.90, last_epoch=-1)
-    epochs = 2
+    epochs = 50
 
 
 class SimNet(object):
@@ -50,4 +49,6 @@ class SimNet(object):
     criterion = nn.BCELoss()
 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
-    epochs = 10
+    epochs = 25
+
+    balance_classes = True

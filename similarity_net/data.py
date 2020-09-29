@@ -5,6 +5,7 @@ from pathlib import Path
 
 import torch
 
+from configure import SimNet
 from utils.logging import log_running_time
 
 logger = logging.getLogger(__name__)
@@ -71,17 +72,18 @@ class Data(object):
         logger.info(f'Num pairs in same device       : {len(indices_1)}')
         logger.info(f'Num pairs in different device  : {len(indices_0)}')
 
-        num_pairs = min(len(indices_1), len(indices_0))
-        indexes_1 = random.sample(indices_1, k=num_pairs)
-        indexes_0 = random.sample(indices_0, k=num_pairs)
+        if SimNet.balance_classes:
+            logger.info(f'Balancing signature pairs')
+            num_pairs = min(len(indices_1), len(indices_0))
+            indexes_1 = random.sample(indices_1, k=num_pairs)
+            indexes_0 = random.sample(indices_0, k=num_pairs)
 
-        selected_indices = random.sample(indexes_1 + indexes_0, k=num_pairs * 2)
-        sig_pairs = [sig_pairs[i] for i in selected_indices]
-        labels = [labels[i] for i in selected_indices]
-        logger.info(f'Balancing signature pairs')
-        logger.info(f'Total number of signature pairs: {num_pairs*2}')
-        logger.info(f'Num pairs in same device       : {num_pairs}')
-        logger.info(f'Num pairs in different device  : {num_pairs}')
+            selected_indices = random.sample(indexes_1 + indexes_0, k=num_pairs * 2)
+            sig_pairs = [sig_pairs[i] for i in selected_indices]
+            labels = [labels[i] for i in selected_indices]
+            logger.info(f'Total number of signature pairs: {num_pairs * 2}')
+            logger.info(f'Num pairs in same device       : {num_pairs}')
+            logger.info(f'Num pairs in different device  : {num_pairs}')
 
         dataset = Dataset(signature_pairs=sig_pairs, labels=labels, transform=None)
         return dataset
@@ -96,6 +98,6 @@ class Data(object):
 
         # Prepare for processing
         if config_mode == 'train':
-            return torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
         elif config_mode == 'test':
-            return torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=False, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=False, num_workers=4)
