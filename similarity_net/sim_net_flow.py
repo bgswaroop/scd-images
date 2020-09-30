@@ -87,9 +87,10 @@ class SimNetFlow(object):
             VisualizationUtils.plot_learning_statistics(history, Configure.simnet_dir)
             Utils.save_model_on_epoch_end(SimNet.model, history, Configure.simnet_dir)
 
-            logger.info("""epoch : {}/{}, train_loss = {:.6f}, val_loss = {:.6f}, train_acc = {:.6f}, val_acc = {:.6f}, 
-            time = {:.2f} sec""".format(epoch, SimNet.epochs, train_loss, val_loss, train_acc, val_acc,
-                                        epoch_end_time - epoch_start_time))
+            logger.info(f"epoch : {epoch}/{SimNet.epochs}, "
+                        f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
+                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}"
+                        f"time = {epoch_end_time - epoch_start_time:.2f} sec")
 
         Utils.save_best_model(pre_trained_models_dir=Configure.simnet_dir,
                               destination_dir=Configure.runtime_dir,
@@ -151,27 +152,28 @@ class SimNetFlow(object):
         VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float),
                                                   Configure.simnet_dir)
 
-        logger.info('Computing model level statistics')
-        models_list = list(sorted(set([x[:-2] for x in devices_list])))
-        model_labels = [(Path(x[0]).parent.name[:-2], Path(x[1]).parent.name[:-2]) for x in image_paths]
-        ground_truths = np.array([1.0 if x[0] == x[1] else 0.0 for x in model_labels])
+        if Configure.compute_model_level_stats:
+            logger.info('Computing model level statistics')
+            models_list = list(sorted(set([x[:-2] for x in devices_list])))
+            model_labels = [(Path(x[0]).parent.name[:-2], Path(x[1]).parent.name[:-2]) for x in image_paths]
+            ground_truths = np.array([1.0 if x[0] == x[1] else 0.0 for x in model_labels])
 
-        results_dir = Configure.simnet_dir.joinpath('model_level')
-        results_dir.mkdir(exist_ok=True, parents=True)
-        np.save(results_dir.joinpath('similarity_scores.npy'), similarity_scores)
-        np.save(results_dir.joinpath('ground_truths.npy'), ground_truths)
+            results_dir = Configure.simnet_dir.joinpath('model_level')
+            results_dir.mkdir(exist_ok=True, parents=True)
+            np.save(results_dir.joinpath('similarity_scores.npy'), similarity_scores)
+            np.save(results_dir.joinpath('ground_truths.npy'), ground_truths)
 
-        VisualizationUtils.plot_roc(ground_truths, similarity_scores, results_dir)
-        threshold = VisualizationUtils.plot_scores_with_thresholds(ground_truths, similarity_scores, results_dir)
-        logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
+            VisualizationUtils.plot_roc(ground_truths, similarity_scores, results_dir)
+            threshold = VisualizationUtils.plot_scores_with_thresholds(ground_truths, similarity_scores, results_dir)
+            logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
 
-        predictions = np.where(similarity_scores > threshold, 1, 0)
-        VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold, results_dir)
+            predictions = np.where(similarity_scores > threshold, 1, 0)
+            VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold, results_dir)
 
-        scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
-        scores.log_scores()
-        BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
-        VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
+            scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
+            scores.log_scores()
+            BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
+            VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
 
 
 if __name__ == '__main__':

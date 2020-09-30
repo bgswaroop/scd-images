@@ -45,7 +45,6 @@ class VisualizationUtils:
         plt.cla()
         plt.close()
 
-
     @staticmethod
     def plot_training_history(save_to_dir, history):
 
@@ -336,10 +335,11 @@ class VisualizationUtils:
         plt.cla()
         plt.close()
 
-        if __name__ == "__main__":
-            utils = VisualizationUtils()
-            # utils.plot_class_wise_data_distribution(
-            #     dataset_dir=None,
-            #     save_to_dir=None
-            # )
-            # utils.save_avg_fourier_images()
+
+if __name__ == "__main__":
+    import logging.config
+    VisualizationUtils.plot_class_wise_data_distribution(
+        dataset_dir=r'/data/p288722/dresden/source_models/natural/',
+        save_to_dir=r'/data/p288722/dresden/source_models/natural/'
+    )
+    # VisualizationUtils.save_avg_fourier_images()

@@ -16,16 +16,17 @@ def run_flow():
     """
 
     # Signature Net
-    # SigNetFlow.train()
+    SigNetFlow.train()
     SigNetFlow.classify()
     # Utils.visualize_ae_input_output_pairs()
     # Utils.save_avg_fourier_images()
 
-    # Configure.train_data = r'/data/p288722/dresden/train/nat_patches_bal_kmkd_1/'
-    # Configure.test_data = r'/data/p288722/dresden/test/nat_patches_bal_kmkd_1/'
+    Configure.train_data = r'/data/p288722/dresden/train/nat_patches_bal_1/'
+    Configure.test_data = r'/data/p288722/dresden/test/nat_patches_bal_1/'
 
     # Similarity Net
-    # SimNetFlow.train()
+    SimNetFlow.train()
+    SimNet.balance_classes = False
     SimNetFlow.classify()
 
     # SimNetFlow.classify()

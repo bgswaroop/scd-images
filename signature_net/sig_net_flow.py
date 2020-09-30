@@ -83,8 +83,10 @@ class SigNetFlow(object):
             VisualizationUtils.plot_learning_statistics(history, Configure.signet_dir)
             Utils.save_model_on_epoch_end(SigNet.model, history, Configure.signet_dir)
 
-            logger.info("epoch : {}/{}, train_loss = {:.6f}, val_loss = {:.6f}, time = {:.2f} sec".format(
-                epoch, SigNet.epochs, train_loss, val_loss, epoch_end_time - epoch_start_time))
+            logger.info(f"epoch : {epoch}/{SigNet.epochs}, "
+                        f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
+                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}"
+                        f"time = {epoch_end_time-epoch_start_time:.2f} sec")
 
         Utils.save_best_model(pre_trained_models_dir=Configure.signet_dir,
                               destination_dir=Configure.runtime_dir,
@@ -166,23 +168,24 @@ class SigNetFlow(object):
         VisualizationUtils.plot_confusion_matrix(ground_truths, predictions,
                                                  one_hot=False, save_to_dir=Configure.signet_dir)
 
-        # Compute model level scores
-        # Combine device-wise predictions to model-level predictions
-        # Warning: The following code assumes that the device folder name is as: <camera_model>_<device_index>
-        # Note that the last two characters of device folder name must uniquely identify the device for a specific
-        # camera model
-        logger.info('Computing model level statistics')
-        results_dir = Configure.signet_dir.joinpath('model_level')
-        results_dir.mkdir(exist_ok=True, parents=True)
-        models_list = list(sorted(set([x[:-2] for x in devices_list])))
-        device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
+        if Configure.compute_model_level_stats:
+            # Compute model level scores
+            # Combine device-wise predictions to model-level predictions
+            # Warning: The following code assumes that the device folder name is as: <camera_model>_<device_index>
+            # Note that the last two characters of device folder name must uniquely identify the device for a specific
+            # camera model
+            logger.info('Computing model level statistics')
+            results_dir = Configure.signet_dir.joinpath('model_level')
+            results_dir.mkdir(exist_ok=True, parents=True)
+            models_list = list(sorted(set([x[:-2] for x in devices_list])))
+            device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
 
-        ground_truths = [device_to_model_map[x] for x in ground_truths]
-        predictions = [device_to_model_map[x] for x in predictions]
+            ground_truths = [device_to_model_map[x] for x in ground_truths]
+            predictions = [device_to_model_map[x] for x in predictions]
 
-        MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
-        VisualizationUtils.plot_confusion_matrix(ground_truths, predictions, one_hot=False,
-                                                 save_to_dir=results_dir)
+            MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
+            VisualizationUtils.plot_confusion_matrix(ground_truths, predictions, one_hot=False,
+                                                     save_to_dir=results_dir)
 
 
 if __name__ == '__main__':
