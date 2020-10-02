@@ -41,8 +41,8 @@ class SimNetFlow(object):
 
         if return_predictions:
             targets = np.ndarray.flatten(targets.cpu().numpy())
-            predictions = np.ndarray.flatten(predictions.cpu().numpy())
-            return accuracy.item(), loss.item(), targets, predictions
+            outputs = np.ndarray.flatten(outputs.cpu().numpy())
+            return accuracy.item(), loss.item(), targets, outputs
         else:
             return accuracy.item(), loss.item()
 
@@ -120,18 +120,18 @@ class SimNetFlow(object):
 
         num_batches = len(data_loader)
         loss, acc = np.zeros(num_batches), np.zeros(num_batches)
-        ground_truths, predictions = [None] * num_batches, [None] * num_batches
+        ground_truths, similarity_scores = [None] * num_batches, [None] * num_batches
         image_paths = []
 
         for batch_id, (input_signatures, (target_labels, img_paths)) in enumerate(data_loader):
-            loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = cls.test_batch \
+            loss[batch_id], acc[batch_id], ground_truths[batch_id], similarity_scores[batch_id] = cls.test_batch \
                 (input_signatures, target_labels.to(Configure.device), return_predictions=True)
             image_paths += list(zip(list(img_paths[0]), list(img_paths[1])))
 
         logger.info(f'Test loss: {np.mean(loss)}')
         logger.info(f'Test accuracy: {np.mean(acc)}')
 
-        ground_truths, similarity_scores = np.concatenate(ground_truths), np.concatenate(predictions)
+        ground_truths, similarity_scores = np.concatenate(ground_truths), np.concatenate(similarity_scores)
         np.save(Configure.simnet_dir.joinpath('similarity_scores.npy'), similarity_scores)
         np.save(Configure.simnet_dir.joinpath('ground_truths.npy'), ground_truths)
 
@@ -145,7 +145,7 @@ class SimNetFlow(object):
                                                                Configure.simnet_dir)
 
         device_labels = [(Path(x[0]).parent.name, Path(x[1]).parent.name) for x in image_paths]
-        scores = ScoreUtils(source_device_labels=device_labels,  predictions=predictions, camera_names=devices_list)
+        scores = ScoreUtils(source_device_labels=device_labels, predictions=predictions, camera_names=devices_list)
         scores.log_scores()
         BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
 
@@ -168,12 +168,120 @@ class SimNetFlow(object):
             logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
 
             predictions = np.where(similarity_scores > threshold, 1, 0)
-            VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold, results_dir)
+            VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold,
+                                                                   results_dir)
 
             scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
             scores.log_scores()
             BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
             VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
+
+    @classmethod
+    @log_running_time
+    def classify_euclidean(cls, config_mode='test'):
+        """
+        Method to classify signature pairs
+        :param config_mode: string - train / test
+        :return: list of similarity scores
+        """
+        if config_mode == 'train':
+            data_loader = Data.load_data(config_mode=config_mode)
+            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data).glob('*'))]
+        elif config_mode == 'test':
+            data_loader = Data.load_data(config_mode=config_mode)
+            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data).glob('*'))]
+        else:
+            raise ValueError('Invalid config_mode')
+
+        num_batches = len(data_loader)
+        similarity_scores = [None] * num_batches
+        image_paths = []
+
+        for batch_id, (input_signatures, (target_labels, img_paths)) in enumerate(data_loader):
+            similarity_scores[batch_id] = -np.linalg.norm(np.array(input_signatures[0] - input_signatures[1]), axis=1)
+            image_paths += list(zip(list(img_paths[0]), list(img_paths[1])))
+
+        similarity_scores = np.concatenate(similarity_scores)
+        similarity_scores = similarity_scores / min(similarity_scores)
+
+        logger.info('Computing model level statistics')
+        models_list = list(sorted(set([x[:-2] for x in devices_list])))
+        model_labels = [(Path(x[0]).parent.name[:-2], Path(x[1]).parent.name[:-2]) for x in image_paths]
+        ground_truths = np.array([1.0 if x[0] == x[1] else 0.0 for x in model_labels])
+
+        results_dir = Configure.simnet_dir.joinpath('euclidean_distance')
+        results_dir.mkdir(exist_ok=True, parents=True)
+        np.save(results_dir.joinpath('similarity_scores.npy'), similarity_scores)
+        np.save(results_dir.joinpath('ground_truths.npy'), ground_truths)
+
+        VisualizationUtils.plot_roc(ground_truths, similarity_scores, results_dir)
+        threshold = VisualizationUtils.plot_scores_with_thresholds(ground_truths, similarity_scores, results_dir)
+        logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
+
+        predictions = np.where(similarity_scores > threshold, 1, 0)
+        VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold, results_dir)
+
+        scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
+        scores.log_scores()
+        BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
+        VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
+
+    @classmethod
+    @log_running_time
+    def classify_t_tests(cls, config_mode='test'):
+        """
+        Method to classify signature pairs using student t-distribution of image patches from two different images.
+        Note that this method works only for image patches and not for full images. Each distribution should have at
+        least around 45 samples for the test to be significant, this translates to at least 10 patches per image.
+        :param config_mode: string - train / test
+        :return: list of similarity scores
+        """
+        raise NotImplementedError('In development, check future commits for completed code')
+        if config_mode == 'train':
+            data_loader = Data.load_data(config_mode=config_mode)
+            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data).glob('*'))]
+        elif config_mode == 'test':
+            data_loader = Data.load_data(config_mode=config_mode)
+            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data).glob('*'))]
+        else:
+            raise ValueError('Invalid config_mode')
+
+        num_batches = len(data_loader)
+        loss, acc = np.zeros(num_batches), np.zeros(num_batches)
+        ground_truths, similarity_scores = [None] * num_batches, [None] * num_batches
+        image_paths = []
+
+        for batch_id, (input_signatures, (target_labels, img_paths)) in enumerate(data_loader):
+            similarity_scores[batch_id] = -np.linalg.norm(np.array(input_signatures[0] - input_signatures[1]), axis=1)
+            image_paths += list(zip(list(img_paths[0]), list(img_paths[1])))
+
+        logger.info(f'Test loss: {np.mean(loss)}')
+        logger.info(f'Test accuracy: {np.mean(acc)}')
+
+        similarity_scores = np.concatenate(similarity_scores)
+        similarity_scores = similarity_scores / min(similarity_scores)
+
+        logger.info('Computing model level statistics')
+        models_list = list(sorted(set([x[:-2] for x in devices_list])))
+        model_labels = [(Path(x[0]).parent.name[:-2], Path(x[1]).parent.name[:-2]) for x in image_paths]
+        ground_truths = np.array([1.0 if x[0] == x[1] else 0.0 for x in model_labels])
+
+        results_dir = Configure.simnet_dir.joinpath('euclidean_distance')
+        results_dir.mkdir(exist_ok=True, parents=True)
+        np.save(results_dir.joinpath('similarity_scores.npy'), similarity_scores)
+        np.save(results_dir.joinpath('ground_truths.npy'), ground_truths)
+
+        VisualizationUtils.plot_roc(ground_truths, similarity_scores, results_dir)
+        threshold = VisualizationUtils.plot_scores_with_thresholds(ground_truths, similarity_scores, results_dir)
+        logger.info("Setting threshold to {} which results in the maximum F1 score.".format(threshold))
+
+        predictions = np.where(similarity_scores > threshold, 1, 0)
+        VisualizationUtils.plot_similarity_scores_distribution(similarity_scores, ground_truths, threshold, results_dir)
+
+        scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
+        scores.log_scores()
+        BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
+        VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
 
 
 if __name__ == '__main__':
