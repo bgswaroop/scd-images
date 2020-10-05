@@ -177,22 +177,75 @@ class BinaryClassificationScores(Score):
 
 
 class MultinomialClassificationScores(Score):
-    def __init__(self, ground_truths, predictions, one_hot):
+    def __init__(self, ground_truths, predictions, one_hot, camera_names):
         super().__init__()
 
+        self.camera_names = camera_names
         if one_hot:
             self.ground_truths = [np.argmax(x) for x in ground_truths]
             self.predictions = [np.argmax(x) for x in predictions]
         else:
             self.ground_truths = ground_truths
             self.predictions = predictions
+
+        self.confusion_matrix = None
+        self.evaluate_all_metrics()
+
+    def evaluate_all_metrics(self):
+        self.compute_evaluation_metrics()
         self.compute_accuracy()
+        # self.compute_precision_recall()
+        # self.compute_f1_score()
+        # self.compute_mcc()
 
     def compute_accuracy(self):
         self.accuracy = sklearn.metrics.accuracy_score(self.ground_truths, self.predictions)
 
-    def compute_confusion_matrix(self):
-        return sklearn.metrics.confusion_matrix(self.ground_truths, self.predictions)
+    def compute_evaluation_metrics(self):
+        self.confusion_matrix = sklearn.metrics.confusion_matrix(self.ground_truths, self.predictions)
+
+        # sklearn.metrics.f1_score
+        # start = 0
+        #
+        # n = len(self.confusion_matrix)
+        # for row in np.arange(0, n):
+        #     if self.consider_upper_diagonal:
+        #         start = row
+        #     for col in np.arange(start, n):
+        #         if row == col:
+        #             self.tp += self.confusion_matrix[row][col]
+        #             self.fn += (1 - self.confusion_matrix[row][col])
+        #         else:
+        #             self.fp += self.confusion_matrix[row][col]
+        #             self.tn += ((1 - self.confusion_matrix[row][col]) * num_samples_matrix[row][col])
+        #
+        # self.tp = int(self.tp)
+        # self.tn = int(self.tn)
+        # self.fp = int(self.fp)
+        # self.fn = int(self.fn)
+
+    def log_scores(self, print_func=logger.info):
+        print_func("Cameras List : \n\n{}\n".format(
+            print_numpy_array_with_index(self.camera_names)
+        ))
+        print_func("Confusion Matrix : \n\n{}\n".format(
+            print_numpy_array_with_index(self.confusion_matrix)
+        ))
+
+        print_func("---------------------------- Global Metrics  -----------------------------")
+        print_func("True Positives     : {}".format(self.tp))
+        print_func("True Negatives     : {}".format(self.tn))
+        print_func("False Positives    : {}".format(self.fp))
+        print_func("False Negatives    : {}".format(self.fn))
+        print_func("True Positive Rate : {}".format(self.tpr))
+        print_func("True Negative Rate : {}".format(self.tnr))
+        print_func("Accuracy           : {}".format(self.accuracy))
+        print_func("Balanced Accuracy  : {}".format(self.balanced_accuracy))
+        print_func("Precision          : {}".format(self.precision))
+        print_func("Recall             : {}".format(self.recall))
+        print_func("MCC                : {}".format(self.mcc))
+        print_func("F1                 : {}".format(self.f1))
+        print_func("--------------------------------------------------------------------------")
 
 
 class ScoreUtils:
@@ -304,34 +357,28 @@ class ScoreUtils:
         self.global_scores["Micro MCC"] = \
             np.nansum(self.class_wise_scores["mcc_score"].values * class_wise_weights) / num_samples
 
-    @staticmethod
-    def print_numpy_array_with_index(numpy_array):
-        pd_array = pd.DataFrame(numpy_array)
-        pd.options.display.float_format = '{:,.2f}'.format
-        return pd_array.to_string()
-
     def log_scores(self, print_func=logger.info):
         print_func("Cameras List : \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.camera_names)
+            print_numpy_array_with_index(self.camera_names)
         ))
         print_func("ground_truth_count_matrix : \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.ground_truth_count_matrix)
+            print_numpy_array_with_index(self.ground_truth_count_matrix)
         ))
         print_func("true_prediction_count_matrix : \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.true_prediction_count_matrix)
+            print_numpy_array_with_index(self.true_prediction_count_matrix)
         ))
         print_func("accuracy_matrix : \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.accuracy_matrix)
+            print_numpy_array_with_index(self.accuracy_matrix)
         ))
         print_func("similarity_matrix : \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.similarity_matrix)
+            print_numpy_array_with_index(self.similarity_matrix)
         ))
 
         # print class wise scores
         self.class_wise_scores.loc['Total'] = \
             self.class_wise_scores.select_dtypes(include=[np.int, np.float]).sum()
         print_func("Class wise scores: \n\n{}\n".format(
-            self.print_numpy_array_with_index(self.class_wise_scores)
+            print_numpy_array_with_index(self.class_wise_scores)
         ))
 
         # print global statistics
@@ -345,3 +392,9 @@ class ScoreUtils:
         print_func("Micro Precision    : {}".format(self.global_scores["Micro Precision"]))
         print_func("Micro Recall       : {}".format(self.global_scores["Micro Recall"]))
         print_func("Micro MCC          : {}".format(self.global_scores["Micro MCC"]))
+
+
+def print_numpy_array_with_index(numpy_array):
+    pd_array = pd.DataFrame(numpy_array)
+    pd.options.display.float_format = '{:,.2f}'.format
+    return pd_array.to_string()

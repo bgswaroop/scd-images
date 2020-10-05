@@ -21,8 +21,8 @@ def run_flow():
     # Utils.visualize_ae_input_output_pairs()
     # Utils.save_avg_fourier_images()
 
-    Configure.train_data = r'/data/p288722/dresden/train/nat_patches_bal_1/'
-    Configure.test_data = r'/data/p288722/dresden/test/nat_patches_bal_1/'
+    Configure.train_data = r'/data/p288722/dresden/train/nat_patches_bal_3/'
+    Configure.test_data = r'/data/p288722/dresden/test/nat_patches_bal_3/'
 
     # Similarity Net
     SimNetFlow.train()

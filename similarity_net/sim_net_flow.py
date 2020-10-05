@@ -89,7 +89,7 @@ class SimNetFlow(object):
 
             logger.info(f"epoch : {epoch}/{SimNet.epochs}, "
                         f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
-                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}"
+                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}, "
                         f"time = {epoch_end_time - epoch_start_time:.2f} sec")
 
         Utils.save_best_model(pre_trained_models_dir=Configure.simnet_dir,
@@ -132,6 +132,9 @@ class SimNetFlow(object):
         logger.info(f'Test accuracy: {np.mean(acc)}')
 
         ground_truths, similarity_scores = np.concatenate(ground_truths), np.concatenate(similarity_scores)
+        ground_truths, similarity_scores, image_paths = \
+            SimNetFlow.patch_to_image(ground_truths, similarity_scores, image_paths)
+
         np.save(Configure.simnet_dir.joinpath('similarity_scores.npy'), similarity_scores)
         np.save(Configure.simnet_dir.joinpath('ground_truths.npy'), ground_truths)
 
@@ -208,6 +211,8 @@ class SimNetFlow(object):
         models_list = list(sorted(set([x[:-2] for x in devices_list])))
         model_labels = [(Path(x[0]).parent.name[:-2], Path(x[1]).parent.name[:-2]) for x in image_paths]
         ground_truths = np.array([1.0 if x[0] == x[1] else 0.0 for x in model_labels])
+        ground_truths, similarity_scores, image_paths = \
+            SimNetFlow.patch_to_image(ground_truths, similarity_scores, image_paths)
 
         results_dir = Configure.simnet_dir.joinpath('euclidean_distance')
         results_dir.mkdir(exist_ok=True, parents=True)
@@ -282,6 +287,41 @@ class SimNetFlow(object):
         scores.log_scores()
         BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
         VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
+
+    @classmethod
+    def patch_to_image(cls, ground_truths, similarity_scores, image_paths, threshold=None,
+                       reduction_method='avg_sim_score'):
+        """
+        Convert the patch level predictions to image level predictions.
+        :param threshold:
+        :param ground_truths:
+        :param similarity_scores:
+        :param image_paths:
+        :param reduction_method: a string with values 'avg_sim_score',
+        :return: None
+        """
+
+        from collections import Counter
+
+        patches_per_image_dict = {}
+        for patch_id, gt, pr in zip(image_paths, ground_truths, similarity_scores):
+            image_id = tuple(['_'.join((Path(x).parent.name + '/' + Path(x).name).split('_')[:-1]) for x in patch_id])
+            if image_id not in patches_per_image_dict:
+                patches_per_image_dict[image_id] = {'gt': [gt], 'pr': [pr]}
+            else:
+                patches_per_image_dict[image_id]['gt'].append(gt)
+                patches_per_image_dict[image_id]['pr'].append(pr)
+
+        ground_truths, similarity_scores, image_paths = [], [], []
+        if reduction_method == 'avg_sim_score':
+            for idx, image_id in enumerate(patches_per_image_dict):
+                ground_truths.append(Counter(patches_per_image_dict[image_id]['gt']).most_common(1)[0][0])
+                similarity_scores.append(np.mean(patches_per_image_dict[image_id]['pr']))
+                image_paths.append(image_id)
+        else:
+            raise ValueError('Invalid reduction method')
+
+        return np.array(ground_truths), np.array(similarity_scores), image_paths
 
 
 if __name__ == '__main__':

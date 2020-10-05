@@ -24,7 +24,7 @@ class Configure(object):
     signet_dir.mkdir(exist_ok=True, parents=True)
     simnet_dir.mkdir(exist_ok=True, parents=True)
 
-    compute_model_level_stats = False
+    compute_model_level_stats = True
 
 
 class SigNet(object):

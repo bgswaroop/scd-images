@@ -7,10 +7,10 @@ import torch
 
 from configure import Configure, SigNet
 from signature_net.data_rgb import Data
+from utils.evaluation_metrics import MultinomialClassificationScores
 from utils.logging import log_running_time
 from utils.training_utils import Utils
 from utils.visualization_utils import VisualizationUtils
-from utils.evaluation_metrics import MultinomialClassificationScores
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,8 @@ class SigNetFlow(object):
 
             logger.info(f"epoch : {epoch}/{SigNet.epochs}, "
                         f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
-                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}"
-                        f"time = {epoch_end_time-epoch_start_time:.2f} sec")
+                        f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}, "
+                        f"time = {epoch_end_time - epoch_start_time:.2f} sec")
 
         Utils.save_best_model(pre_trained_models_dir=Configure.signet_dir,
                               destination_dir=Configure.runtime_dir,
@@ -151,20 +151,22 @@ class SigNetFlow(object):
         num_batches = len(data_loader)
         loss, acc = np.zeros(num_batches), np.zeros(num_batches)
         ground_truths, predictions = [None] * num_batches, [None] * num_batches
-        ground_truth_img_paths = []
+        image_paths = []
 
         for batch_id, (input_images, (target_labels, img_paths)) in enumerate(data_loader):
             loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = \
                 cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device),
                                return_predictions=True)
-            ground_truth_img_paths += img_paths
+            image_paths += img_paths
 
         logger.info(f'Test loss: {np.mean(loss)}')
         logger.info(f'Test accuracy: {np.mean(acc)}')
 
         ground_truths, predictions = np.concatenate(ground_truths), np.concatenate(predictions)
+        ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths)
 
-        MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
+        MultinomialClassificationScores(ground_truths, predictions, one_hot=False,
+                                        camera_names=devices_list).log_scores()
         VisualizationUtils.plot_confusion_matrix(ground_truths, predictions,
                                                  one_hot=False, save_to_dir=Configure.signet_dir)
 
@@ -182,10 +184,45 @@ class SigNetFlow(object):
 
             ground_truths = [device_to_model_map[x] for x in ground_truths]
             predictions = [device_to_model_map[x] for x in predictions]
+            ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths)
 
-            MultinomialClassificationScores(ground_truths, predictions, one_hot=False).log_scores()
+            MultinomialClassificationScores(ground_truths, predictions, one_hot=False,
+                                            camera_names=devices_list).log_scores()
             VisualizationUtils.plot_confusion_matrix(ground_truths, predictions, one_hot=False,
                                                      save_to_dir=results_dir)
+
+    @staticmethod
+    def patch_to_image(ground_truths, predictions, image_paths, aggregation_method='majority_vote'):
+        """
+        Convert the patch level predictions to image level predictions.
+        :param ground_truths:
+        :param predictions:
+        :param image_paths:
+        :param aggregation_method: a string with values 'majority_vote'
+        :return: None
+        """
+
+        from collections import Counter
+
+        patches_per_image_dict = {}
+        for patch_id, gt, pr in zip(image_paths, ground_truths, predictions):
+            patch_id = Path(patch_id)
+            image_id = '_'.join((patch_id.parent.name + '/' + patch_id.name).split('_')[:-1])
+            if image_id not in patches_per_image_dict:
+                patches_per_image_dict[image_id] = {'gt': [gt], 'pr': [pr]}
+            else:
+                patches_per_image_dict[image_id]['gt'].append(gt)
+                patches_per_image_dict[image_id]['pr'].append(pr)
+
+        ground_truths, predictions = [], []
+        if aggregation_method == 'majority_vote':
+            for idx, image_id in enumerate(patches_per_image_dict):
+                ground_truths.append(Counter(patches_per_image_dict[image_id]['gt']).most_common(1)[0][0])
+                predictions.append(Counter(patches_per_image_dict[image_id]['pr']).most_common(1)[0][0])
+        else:
+            raise ValueError('Invalid aggregation_method')
+
+        return np.array(ground_truths), np.array(predictions)
 
 
 if __name__ == '__main__':
