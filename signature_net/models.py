@@ -49,9 +49,15 @@ class AutoEncoder(nn.Module):
 
 
 class SignatureNet1(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, is_constrained):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=96, kernel_size=(7, 7), padding=(3, 3), stride=(2, 2))
+        self.is_constrained = is_constrained
+        if is_constrained:
+            self.conv0 = nn.Conv2d(in_channels=3, out_channels=5, kernel_size=(7, 7), padding=(3, 3), stride=(1, 1))
+            self.conv1 = nn.Conv2d(in_channels=5, out_channels=96, kernel_size=(7, 7), padding=(3, 3), stride=(2, 2))
+        else:
+            self.conv1 = nn.Conv2d(in_channels=3, out_channels=96, kernel_size=(7, 7), padding=(3, 3), stride=(2, 2))
+
         self.bn1 = nn.BatchNorm2d(num_features=96)
         self.conv2 = nn.Conv2d(in_channels=96, out_channels=64, kernel_size=(5, 5), padding=(2, 2))
         self.bn2 = nn.BatchNorm2d(num_features=64)
@@ -73,8 +79,14 @@ class SignatureNet1(nn.Module):
         return x
 
     def extract_features(self, cnn_inputs):
+
+        if self.is_constrained:
+            x = self.conv0(cnn_inputs)
+            x = self.conv1(x)
+        else:
+            x = self.conv1(cnn_inputs)
+
         # Block 1
-        x = self.conv1(cnn_inputs)
         x = self.bn1(x)
         x = nn.ReLU()(x)
         x = nn.MaxPool2d(2, 2)(x)

@@ -1,4 +1,6 @@
+import json
 import logging
+import pickle
 from pathlib import Path
 from time import perf_counter
 
@@ -25,6 +27,14 @@ class SigNetFlow(object):
         loss.backward()
         SigNet.optimizer.step()
 
+        if SigNet.is_constrained:
+            with torch.no_grad():
+                a = SigNet.model.conv0.weight.data
+                a[:, :, 3, 3] = 0
+                a = a / torch.sum(a, dim=[2, 3], keepdim=True)
+                a[:, :, 3, 3] = -1
+                SigNet.model.conv0.weight.data = a
+
         predictions = torch.max(outputs, dim=1).indices
         ground_truths = torch.max(targets, dim=1).indices
         accuracy = torch.mean(torch.as_tensor(ground_truths == predictions, dtype=torch.float32))
@@ -33,8 +43,16 @@ class SigNetFlow(object):
 
     @staticmethod
     @torch.no_grad()
-    def test_batch(inputs, targets, return_predictions=False):
+    def test_batch(inputs, targets, return_predictions=False, device_to_model_map=None):
         outputs = SigNet.model(inputs)
+
+        if outputs.shape != targets.shape:
+            # Convert the outputs to model level predictions
+            model_level_outputs = torch.tensor(np.zeros(targets.shape), dtype=torch.float32).to(Configure.device)
+            for device_idx, model_idx in device_to_model_map.items():
+                model_level_outputs[:, model_idx] += outputs[:, device_idx]
+            outputs = model_level_outputs
+
         loss = SigNet.criterion(outputs, targets)
 
         predictions = torch.max(outputs, dim=1).indices
@@ -49,9 +67,18 @@ class SigNetFlow(object):
     @classmethod
     @log_running_time
     def train(cls):
+        # Fix the seeds for the RNGs
+        torch.manual_seed(0)
+
         # Prepare the data
         train_loader = Data.load_data(dataset=Configure.train_data, config_mode='train')
         test_loader = Data.load_data(dataset=Configure.test_data, config_mode='test')
+
+        with open(Configure.train_data, 'r') as f:
+            dataset_dict = json.load(f)
+            devices_list = list(sorted([x for x in dataset_dict['file_paths']]))
+        models_list = list(sorted(set([x[:-2] for x in devices_list])))
+        device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
 
         init_epoch, history, model = Utils.prepare_for_training(Configure.signet_dir, SigNet.model)
         for epoch in range(init_epoch, SigNet.epochs + 1):
@@ -63,24 +90,32 @@ class SigNetFlow(object):
             epoch_start_time = perf_counter()
             for i, (input_images, (target_labels, _)) in enumerate(train_loader):
                 loss[i], acc[i] = cls.train_batch(input_images.to(Configure.device), target_labels.to(Configure.device))
+                if i % 100 == 0:
+                    logger.info(f'Running batch : {i}')
 
             train_acc, train_loss = np.mean(acc), np.mean(loss)
             lr = SigNet.scheduler.get_last_lr()
             SigNet.scheduler.step()
             epoch_end_time = perf_counter()
 
+            logger.info(f'Running validate')
             # Validate
             SigNet.model.eval()
             num_batches = len(test_loader)
             loss, acc = np.zeros(num_batches), np.zeros(num_batches)
+            logger.info(f'Running validate job')
             for i, (input_images, (target_labels, _)) in enumerate(test_loader):
-                loss[i], acc[i] = cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device))
+                loss[i], acc[i] = cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device),
+                                                 device_to_model_map=device_to_model_map)
 
             val_acc, val_loss = np.mean(acc), np.mean(loss)
 
             # Log epoch statistics
+            logger.info(f'log stats')
             Utils.update_history(history, epoch, train_loss, val_loss, train_acc, val_acc, lr, Configure.signet_dir)
+            logger.info(f'plot lr')
             VisualizationUtils.plot_learning_statistics(history, Configure.signet_dir)
+            logger.info(f'save')
             Utils.save_model_on_epoch_end(SigNet.model, history, Configure.signet_dir)
 
             logger.info(f"epoch : {epoch}/{SigNet.epochs}, "
@@ -141,12 +176,22 @@ class SigNetFlow(object):
 
         if config_mode == 'train':
             data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
-            devices_list = list(sorted([x.name for x in Path(Configure.train_data).glob('*')]))
+            with open(Configure.train_data, 'r') as f:
+                dataset_dict = json.load(f)
+                devices_list = list(sorted([x for x in dataset_dict['file_paths']]))
         elif config_mode == 'test':
             data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
-            devices_list = list(sorted([x.name for x in Path(Configure.test_data).glob('*')]))
+            with open(Configure.test_data, 'r') as f:
+                dataset_dict = json.load(f)
+                devices_list = list(sorted([x for x in dataset_dict['file_paths']]))
         else:
             raise ValueError('Invalid config_mode')
+
+        with open(Configure.train_data, 'r') as f:
+            dataset_dict = json.load(f)
+            devices_list = list(sorted([x for x in dataset_dict['file_paths']]))
+        models_list = list(sorted(set([x[:-2] for x in devices_list])))
+        device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
 
         num_batches = len(data_loader)
         loss, acc = np.zeros(num_batches), np.zeros(num_batches)
@@ -156,7 +201,7 @@ class SigNetFlow(object):
         for batch_id, (input_images, (target_labels, img_paths)) in enumerate(data_loader):
             loss[batch_id], acc[batch_id], ground_truths[batch_id], predictions[batch_id] = \
                 cls.test_batch(input_images.to(Configure.device), target_labels.to(Configure.device),
-                               return_predictions=True)
+                               return_predictions=True, device_to_model_map=device_to_model_map)
             image_paths += img_paths
 
         logger.info(f'Test loss: {np.mean(loss)}')
@@ -165,8 +210,10 @@ class SigNetFlow(object):
         ground_truths, predictions = np.concatenate(ground_truths), np.concatenate(predictions)
         ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths)
 
-        MultinomialClassificationScores(ground_truths, predictions, one_hot=False,
-                                        camera_names=devices_list).log_scores()
+        scores = MultinomialClassificationScores(ground_truths, predictions, one_hot=False, camera_names=models_list)
+        scores.log_scores()
+        with open(str(Configure.signet_dir.joinpath('scores.pkl')), 'wb+') as f:
+            pickle.dump(scores, f)
         VisualizationUtils.plot_confusion_matrix(ground_truths, predictions,
                                                  one_hot=False, save_to_dir=Configure.signet_dir)
 
@@ -179,15 +226,15 @@ class SigNetFlow(object):
             logger.info('Computing model level statistics')
             results_dir = Configure.signet_dir.joinpath('model_level')
             results_dir.mkdir(exist_ok=True, parents=True)
-            models_list = list(sorted(set([x[:-2] for x in devices_list])))
-            device_to_model_map = {idx: models_list.index(x[:-2]) for idx, x in enumerate(devices_list)}
 
             ground_truths = [device_to_model_map[x] for x in ground_truths]
             predictions = [device_to_model_map[x] for x in predictions]
-            ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths)
+            # ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths)
 
-            MultinomialClassificationScores(ground_truths, predictions, one_hot=False,
-                                            camera_names=devices_list).log_scores()
+            scores = MultinomialClassificationScores(ground_truths, predictions, False, models_list)
+            scores.log_scores()
+            with open(str(Configure.signet_dir.joinpath('scores.pkl')), 'wb+') as f:
+                pickle.dump(scores, f)
             VisualizationUtils.plot_confusion_matrix(ground_truths, predictions, one_hot=False,
                                                      save_to_dir=results_dir)
 

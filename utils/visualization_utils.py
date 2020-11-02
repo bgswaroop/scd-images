@@ -151,8 +151,8 @@ class VisualizationUtils:
                         cbar_kws={'label': 'No. of images'})  # font size
 
         # This is to fix an issue with matplotlib==3.1.1
-        bottom, top = ax.get_ylim()
-        ax.set_ylim(bottom + 0.5, top - 0.5)
+        # bottom, top = ax.get_ylim()
+        # ax.set_ylim(bottom + 0.5, top - 0.5)
         plt.xticks(rotation=0)
         plt.yticks(rotation=0)
         plt.title("Confusion Matrix - Signature Net", pad=30)

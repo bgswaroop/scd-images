@@ -188,7 +188,18 @@ class MultinomialClassificationScores(Score):
             self.ground_truths = ground_truths
             self.predictions = predictions
 
+        self.macro_f1_score = None
+        self.macro_precision = None
+        self.macro_recall = None
+        self.micro_precision = None
+        self.micro_recall = None
+        self.micro_f1_score = None
+        self.weighted_f1_score = None
+        self.weighted_precision = None
+        self.weighted_recall = None
+
         self.confusion_matrix = None
+        self.class_wise_scores = None
         self.evaluate_all_metrics()
 
     def evaluate_all_metrics(self):
@@ -202,49 +213,62 @@ class MultinomialClassificationScores(Score):
         self.accuracy = sklearn.metrics.accuracy_score(self.ground_truths, self.predictions)
 
     def compute_evaluation_metrics(self):
-        self.confusion_matrix = sklearn.metrics.confusion_matrix(self.ground_truths, self.predictions)
 
-        # sklearn.metrics.f1_score
-        # start = 0
-        #
-        # n = len(self.confusion_matrix)
-        # for row in np.arange(0, n):
-        #     if self.consider_upper_diagonal:
-        #         start = row
-        #     for col in np.arange(start, n):
-        #         if row == col:
-        #             self.tp += self.confusion_matrix[row][col]
-        #             self.fn += (1 - self.confusion_matrix[row][col])
-        #         else:
-        #             self.fp += self.confusion_matrix[row][col]
-        #             self.tn += ((1 - self.confusion_matrix[row][col]) * num_samples_matrix[row][col])
-        #
-        # self.tp = int(self.tp)
-        # self.tn = int(self.tn)
-        # self.fp = int(self.fp)
-        # self.fn = int(self.fn)
+        cm = sklearn.metrics.confusion_matrix(self.ground_truths, self.predictions)
+        self.confusion_matrix = cm
+
+        diagonals = [x[idx] for idx, x in enumerate(cm)]
+
+        precision = diagonals / np.sum(cm, axis=0)
+        recall = diagonals / np.sum(cm, axis=1)
+        f1_score = 2 * precision * recall / (precision + recall)
+
+        self.macro_f1_score = np.mean(f1_score)
+        self.macro_precision = np.mean(precision)
+        self.macro_recall = np.mean(recall)
+
+        self.micro_precision = np.sum(diagonals) / np.sum(cm)
+        self.micro_recall = np.sum(diagonals) / np.sum(cm)
+        self.micro_f1_score = 2 * self.micro_precision * self.micro_recall / (self.micro_precision + self.micro_recall)
+
+        support = np.sum(cm, axis=1)
+        self.weighted_f1_score = np.dot(support, f1_score) / np.sum(support)
+        self.weighted_precision = np.dot(support, precision) / np.sum(support)
+        self.weighted_recall = np.dot(support, recall) / np.sum(support)
+
+        self.class_wise_scores = pd.DataFrame({
+            "class name": np.array(self.camera_names),
+            "support": support.astype(np.float),
+            "precision": precision.astype(np.float),
+            "recall": recall.astype(np.float),
+            "f1_score": f1_score.astype(np.float)
+        })
 
     def log_scores(self, print_func=logger.info):
-        print_func("Cameras List : \n\n{}\n".format(
-            print_numpy_array_with_index(self.camera_names)
-        ))
+        # print_func("Cameras List : \n\n{}\n".format(
+        #     print_numpy_array_with_index(self.camera_names)
+        # ))
         print_func("Confusion Matrix : \n\n{}\n".format(
             print_numpy_array_with_index(self.confusion_matrix)
         ))
+        # print class wise scores
+        self.class_wise_scores.loc['Total'] = \
+            self.class_wise_scores.select_dtypes(include=[np.int, np.float]).sum()
+        print_func("Class wise scores: \n\n{}\n".format(
+            print_numpy_array_with_index(self.class_wise_scores)
+        ))
 
         print_func("---------------------------- Global Metrics  -----------------------------")
-        print_func("True Positives     : {}".format(self.tp))
-        print_func("True Negatives     : {}".format(self.tn))
-        print_func("False Positives    : {}".format(self.fp))
-        print_func("False Negatives    : {}".format(self.fn))
-        print_func("True Positive Rate : {}".format(self.tpr))
-        print_func("True Negative Rate : {}".format(self.tnr))
         print_func("Accuracy           : {}".format(self.accuracy))
-        print_func("Balanced Accuracy  : {}".format(self.balanced_accuracy))
-        print_func("Precision          : {}".format(self.precision))
-        print_func("Recall             : {}".format(self.recall))
-        print_func("MCC                : {}".format(self.mcc))
-        print_func("F1                 : {}".format(self.f1))
+        print_func("Macro precision    : {}".format(self.macro_precision))
+        print_func("Macro recall       : {}".format(self.macro_recall))
+        print_func("Macro f1-score     : {}".format(self.macro_f1_score))
+        print_func("Micro precision    : {}".format(self.micro_precision))
+        print_func("Micro recall       : {}".format(self.micro_recall))
+        print_func("Micro f1-score     : {}".format(self.micro_f1_score))
+        print_func("Weighted precision : {}".format(self.weighted_precision))
+        print_func("Weighted recall    : {}".format(self.weighted_recall))
+        print_func("Weighted f1-score  : {}".format(self.weighted_f1_score))
         print_func("--------------------------------------------------------------------------")
 
 

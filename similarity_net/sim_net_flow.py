@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from time import perf_counter
 
+import pickle
 import numpy as np
 import torch
 
@@ -49,6 +50,9 @@ class SimNetFlow(object):
     @classmethod
     @log_running_time
     def train(cls):
+        # Fix the seeds for the RNGs
+        torch.manual_seed(0)
+
         summary(SimNet.model, (1024, 1024), print_fn=logger.info)
         train_loader = Data.load_data(config_mode='train')
         test_loader = Data.load_data(config_mode='test')
@@ -150,6 +154,9 @@ class SimNetFlow(object):
         device_labels = [(Path(x[0]).parent.name, Path(x[1]).parent.name) for x in image_paths]
         scores = ScoreUtils(source_device_labels=device_labels, predictions=predictions, camera_names=devices_list)
         scores.log_scores()
+        with open(str(Configure.simnet_dir.joinpath('scores.pkl')), 'wb+') as f:
+            pickle.dump(scores, f)
+
         BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
 
         VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float),
@@ -176,6 +183,9 @@ class SimNetFlow(object):
 
             scores = ScoreUtils(source_device_labels=model_labels, predictions=predictions, camera_names=models_list)
             scores.log_scores()
+            with open(str(Configure.simnet_dir.joinpath('scores.pkl')), 'wb+') as f:
+                pickle.dump(scores, f)
+
             BinaryClassificationScores(ground_truths=ground_truths, predictions=predictions).log_scores()
             VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
 
@@ -289,11 +299,9 @@ class SimNetFlow(object):
         VisualizationUtils.plot_similarity_matrix(scores.similarity_matrix.astype(np.float), results_dir)
 
     @classmethod
-    def patch_to_image(cls, ground_truths, similarity_scores, image_paths, threshold=None,
-                       reduction_method='avg_sim_score'):
+    def patch_to_image(cls, ground_truths, similarity_scores, image_paths, reduction_method='avg_sim_score'):
         """
         Convert the patch level predictions to image level predictions.
-        :param threshold:
         :param ground_truths:
         :param similarity_scores:
         :param image_paths:
@@ -305,19 +313,19 @@ class SimNetFlow(object):
 
         patches_per_image_dict = {}
         for patch_id, gt, pr in zip(image_paths, ground_truths, similarity_scores):
-            image_id = tuple(['_'.join((Path(x).parent.name + '/' + Path(x).name).split('_')[:-1]) for x in patch_id])
-            if image_id not in patches_per_image_dict:
-                patches_per_image_dict[image_id] = {'gt': [gt], 'pr': [pr]}
+            image_pair = tuple(['_'.join((Path(x).parent.name + '/' + Path(x).name).split('_')[:-1]) for x in patch_id])
+            if image_pair not in patches_per_image_dict:
+                patches_per_image_dict[image_pair] = {'gt': [gt], 'pr': [pr]}
             else:
-                patches_per_image_dict[image_id]['gt'].append(gt)
-                patches_per_image_dict[image_id]['pr'].append(pr)
+                patches_per_image_dict[image_pair]['gt'].append(gt)
+                patches_per_image_dict[image_pair]['pr'].append(pr)
 
         ground_truths, similarity_scores, image_paths = [], [], []
         if reduction_method == 'avg_sim_score':
-            for idx, image_id in enumerate(patches_per_image_dict):
-                ground_truths.append(Counter(patches_per_image_dict[image_id]['gt']).most_common(1)[0][0])
-                similarity_scores.append(np.mean(patches_per_image_dict[image_id]['pr']))
-                image_paths.append(image_id)
+            for idx, image_pair in enumerate(patches_per_image_dict):
+                ground_truths.append(Counter(patches_per_image_dict[image_pair]['gt']).most_common(1)[0][0])
+                similarity_scores.append(np.mean(patches_per_image_dict[image_pair]['pr']))
+                image_paths.append(image_pair)
         else:
             raise ValueError('Invalid reduction method')
 
