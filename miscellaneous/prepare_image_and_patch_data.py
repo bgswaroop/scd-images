@@ -5,6 +5,7 @@ import shutil
 from collections import namedtuple
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 
@@ -22,7 +23,7 @@ def get_patches(img_data, std_threshold, max_num_patches, patch_size):
     patches = []
 
     patch = namedtuple('WindowSize', ['width', 'height'])(*patch_size)
-    stride = namedtuple('Strides', ['width_step', 'height_step'])(*patch_size)
+    stride = namedtuple('Strides', ['width_step', 'height_step'])(patch.width // 4, patch.height // 4)
     image = namedtuple('ImageSize', ['width', 'height'])(img_data.shape[1], img_data.shape[0])
     num_channels = 3
 
@@ -50,6 +51,7 @@ def get_patches(img_data, std_threshold, max_num_patches, patch_size):
     return patches
 
 
+# fixme: This method is modified to extract only from SONY Cameras
 def extract_patches_from_images(source_images_dir, dest_patches_dir, max_num_patches=15, patch_size=(128, 128)):
     """
     This method extracts patches from images
@@ -59,7 +61,6 @@ def extract_patches_from_images(source_images_dir, dest_patches_dir, max_num_pat
     :param patch_size: a tuple
     :return: None
     """
-    import cv2
 
     devices = source_images_dir.glob("*")
     # Removing directory is not suited to run in parallel mode
@@ -70,6 +71,9 @@ def extract_patches_from_images(source_images_dir, dest_patches_dir, max_num_pat
     for device in devices:
         image_paths = device.glob("*")
         destination_device_dir = dest_patches_dir.joinpath(device.name)
+
+        # if 'Sony' not in device.name:
+        #     continue
 
         # The following if-else construct makes sense on running multiple instances of this method
         if destination_device_dir.exists():
@@ -342,7 +346,7 @@ def filter_patches(source_patches_view, dest_patches_view, num_patches=1):
         f.close()
 
 
-def dresden_create_18_models(source_dir, train_dir, test_dir, keep_dest_models=True):
+def dresden_create_18_models(source_dir, train_dir, test_dir, group_devices_into_models=True):
     """
     Create views for performing leave one out cross validation
     """
@@ -391,28 +395,32 @@ def dresden_create_18_models(source_dir, train_dir, test_dir, keep_dest_models=T
         train_fp = open(train_dir.joinpath(f'fold_{fold_id + 1}.json'), 'w+')
         test_fp = open(test_dir.joinpath(f'fold_{fold_id + 1}.json'), 'w+')
 
-        for file_pointer, devices_list in [(train_fp, train_devices), (test_fp, test_devices)]:
-            labels_dictionary = {}
+        for file_pointer, devices_list in [(test_fp, test_devices), (train_fp, train_devices)]:
+            hierarchical_paths = {}
             for device_path in [source_dir.joinpath(x) for x in devices_list]:
                 images = [str(x) for x in device_path.glob('*')]
-                if device_path.name == 'Nikon_D70s_0':
-                    device_name = 'Nikon_D70_2'
-                elif device_path.name == 'Nikon_D70s_1':
-                    device_name = 'Nikon_D70_3'
-                else:
-                    device_name = device_path.name
+                for img_path in images:
+                    parts = Path(img_path).name.split('_')[:-1]
+                    image = '_'.join(parts)
+                    device = '_'.join(parts[:-1])
+                    model = '_'.join(parts[:-2])
+                    brand = '_'.join(parts[:1])
 
-                if keep_dest_models:
-                    camera_name = '_'.join(device_name.split('_')[:-1])
-                else:
-                    camera_name = device_name
+                    if model == 'Nikon_D70s':
+                        model = 'Nikon_D70'
 
-                if camera_name not in labels_dictionary:
-                    labels_dictionary[camera_name] = images
-                else:
-                    labels_dictionary[camera_name] += images
+                    if brand not in hierarchical_paths:
+                        hierarchical_paths[brand] = {}
+                    if model not in hierarchical_paths[brand]:
+                        hierarchical_paths[brand][model] = {}
+                    if device not in hierarchical_paths[brand][model]:
+                        hierarchical_paths[brand][model][device] = {}
+                    if image not in hierarchical_paths[brand][model][device]:
+                        hierarchical_paths[brand][model][device][image] = []
 
-            json_dictionary = {'file_paths': labels_dictionary}
+                    hierarchical_paths[brand][model][device][image].append(img_path)
+
+            json_dictionary = {'file_paths': hierarchical_paths}
             json_string = json.dumps(json_dictionary, indent=2)
             file_pointer.write(json_string)
             file_pointer.close()
@@ -475,58 +483,255 @@ def dresden_filter_patches_from_images(source_images_view, source_patches_dir, d
         f.close()
 
 
+def restructure_dataset_to_hierarchical(source_view, dest_view):
+    # Read the json source_images_view
+    with open(source_view, 'r') as f:
+        source_images = json.load(f)['file_paths']
+
+    image_paths = []
+    for camera in source_images:
+        image_paths += source_images[camera]
+    image_paths.sort()
+
+    hierarchical_paths = {}
+    for img_path in image_paths:
+        parts = Path(img_path).name.split('_')[:-1]
+        image = '_'.join(parts)
+        device = '_'.join(parts[:-1])
+        model = '_'.join(parts[:-2])
+        brand = '_'.join(parts[:1])
+
+        if model == 'Nikon_D70s':
+            model = 'Nikon_D70'
+
+        if brand not in hierarchical_paths:
+            hierarchical_paths[brand] = {}
+        if model not in hierarchical_paths[brand]:
+            hierarchical_paths[brand][model] = {}
+        if device not in hierarchical_paths[brand][model]:
+            hierarchical_paths[brand][model][device] = {}
+        if image not in hierarchical_paths[brand][model][device]:
+            hierarchical_paths[brand][model][device][image] = []
+
+        hierarchical_paths[brand][model][device][image].append(img_path)
+
+    json_dictionary = {'file_paths': hierarchical_paths}
+    json_string = json.dumps(json_dictionary, indent=2)
+
+    with open(dest_view, 'w+') as f:
+        f.write(json_string)
+        f.close()
+
+    pass
+
+
+def generate_stats_from_hierarchical_datasets(source_view):
+    # Read the json source_images_view
+    with open(source_view, 'r') as f:
+        data = json.load(f)['file_paths']
+
+    # Compute statistics
+    num_patches_per_image_distribution = {x: 0 for x in range(1, 201)}
+    image_dataset = {x: [] for x in range(1, 201)}
+    total_num_images = 0
+    for brand in data:
+        for model in data[brand]:
+            for device in data[brand][model]:
+                for image in data[brand][model][device]:
+                    count = len(data[brand][model][device][image])
+                    num_patches_per_image_distribution[count] += 1
+                    total_num_images += 1
+
+                    patch_path = data[brand][model][device][image][0]
+                    image_path = patch_path.replace('nat_patches_128x128_200', 'natural')
+                    image_path = '_'.join(image_path.split('_')[:-1]) + '.JPG'
+                    image_dataset[count].append(image_path)
+
+    with open('single_patch_images.txt', 'w+') as f:
+        for item in image_dataset[1]:
+            f.write(f'"{item}" ')
+
+    csv_string = 'No. patches, No. images, Proportion\n'
+    for patch_count, image_count in num_patches_per_image_distribution.items():
+        csv_string += f'{patch_count}, {image_count}, {image_count / total_num_images}\n'
+    with open('patches_distribution_test.csv', 'w+') as f:
+        f.write(csv_string)
+
+    from multiprocessing import Pool
+    paths_list = []
+    for brand in data:
+        for model in data[brand]:
+            for device in data[brand][model]:
+                file_paths = []
+                for image in data[brand][model][device]:
+                    file_paths.extend(data[brand][model][device][image])
+                paths_list.append((file_paths, device))
+
+    with Pool(len(paths_list)) as p:
+        p.starmap(compute_std_dev, paths_list)
+
+
+def compute_std_dev(file_paths, device):
+    std_devs_R, std_devs_G, std_devs_B = [], [], []
+    for patch in file_paths:
+        img = cv2.imread(str(patch))
+        img = np.float32(img) / 255.0
+        patch_std = np.std(img.reshape(-1, 3), axis=0)
+        std_devs_R.append(patch_std[0])
+        std_devs_G.append(patch_std[1])
+        std_devs_B.append(patch_std[2])
+
+    Path(r'patch_std').mkdir(exist_ok=True, parents=True)
+    np.save(f'patch_std/std_devs_r_{device}.npy', np.array(std_devs_R))
+    np.save(f'patch_std/std_devs_g_{device}.npy', np.array(std_devs_G))
+    np.save(f'patch_std/std_devs_b_{device}.npy', np.array(std_devs_B))
+
+
+def prepare_balanced_hierarchical_dataset(source_view, dest_level, max_patches, dest_view=None):
+    # Read the json source_images_view
+    with open(source_view, 'r') as f:
+        source_images = json.load(f)['file_paths']
+
+    patches_distribution = {}
+    images_dict = {}
+
+    for brand in source_images:
+        num_samples_per_model = max_patches / len(source_images[brand])
+        key = brand
+
+        for model in source_images[brand]:
+            if dest_level == 'model':
+                num_samples_per_device = max_patches / len(source_images[brand][model])
+                key = model
+            else:
+                num_samples_per_device = num_samples_per_model / len(source_images[brand][model])
+
+            for device in source_images[brand][model]:
+                if dest_level == 'device':
+                    num_samples_per_image = round(max_patches / len(source_images[brand][model][device]))
+                    key = device
+                else:
+                    num_samples_per_image = round(num_samples_per_device / len(source_images[brand][model][device]))
+
+                for image in source_images[brand][model][device]:
+                    patches = source_images[brand][model][device][image]
+
+                    random.seed(123)
+                    random.shuffle(patches)
+                    try:
+                        patch_paths = patches[:num_samples_per_image]
+                    except TypeError as e:
+                        print(num_patches)
+                        raise e
+
+                    if key in images_dict:
+                        images_dict[key].extend(patch_paths)
+                    else:
+                        images_dict[key] = patch_paths
+
+                    if len(patch_paths) in patches_distribution:
+                        patches_distribution[len(patch_paths)] += 1
+                    else:
+                        patches_distribution[len(patch_paths)] = 1
+
+    patches_distribution = {x: patches_distribution[x] for x in
+                            sorted(patches_distribution, key=lambda x: patches_distribution[x])}
+    print('Patches Distribution', patches_distribution)
+
+    images_dict = {x: images_dict[x] for x in sorted(images_dict.keys())}
+    if dest_view:
+        json_dictionary = {'file_paths': images_dict}
+        json_string = json.dumps(json_dictionary, indent=2)
+
+        Path(dest_view).parent.mkdir(parents=True, exist_ok=True)
+        with open(dest_view, 'w+') as f:
+            f.write(json_string)
+
+    return images_dict
+
+
 if __name__ == "__main__":
     # from random import randint
     # from time import sleep
     #
-    # sleep(randint(10, 100))
-    #
-    # extract_patches_from_images(source_images_dir=Path(rf'/data/p288722/dresden/source_devices/natural/'),
-    #                             dest_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
-    #                             max_num_patches=20,
-    #                             patch_size=(128, 128))
-    #
-    dresden_create_18_models(source_dir=Path(r'/data/p288722/dresden/source_devices/natural/'),
-                             train_dir=Path(r'/data/p288722/dresden/train/nat_images_18_devices'),
-                             test_dir=Path(r'/data/p288722/dresden/test/nat_images_18_devices'),
-                             keep_dest_models=False)
+    # sleep(randint(10, 60))
 
-    # fold_id = 2
-    # dresden_filter_patches_from_images(
-    #     source_images_view=Path(rf'/data/p288722/dresden/test/nat_images_18_devices/fold_{fold_id}.json'),
-    #     source_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
-    #     dest_patches_view=Path(
-    #         rf'/data/p288722/dresden/test/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
-    #     keep_dest_models=False
+    patch_size = 128
+    num_patches = 200
+    suffix = f'{patch_size}x{patch_size}_{num_patches}'
+
+    # extract_patches_from_images(source_images_dir=Path(rf'/data/p288722/dresden/source_devices/natural/'),
+    #                             dest_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_{suffix}/'),
+    #                             max_num_patches=num_patches,
+    #                             patch_size=(patch_size, patch_size))
+
+    # dresden_create_18_models(source_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_{suffix}/'),
+    #                          train_dir=Path(rf'/data/p288722/dresden/train/nat_patches_18_models_{suffix}'),
+    #                          test_dir=Path(rf'/data/p288722/dresden/test/nat_patches_18_models_{suffix}'),
+    #                          group_devices_into_models=True)
+
+    # generate_stats_from_hierarchical_datasets(
+    #     rf'/data/p288722/dresden/test/nat_patches_18_models_{suffix}/fold_{1}.json'
     # )
 
-    for fold_id in range(1, 6):
-        dresden_filter_patches_from_images(
-            source_images_view=Path(rf'/data/p288722/dresden/train/nat_images_18_devices/fold_{fold_id}.json'),
-            source_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
-            dest_patches_view=Path(rf'/data/p288722/dresden/train/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
-            keep_dest_models=False
-        )
-        dresden_filter_patches_from_images(
-            source_images_view=Path(rf'/data/p288722/dresden/test/nat_images_18_devices/fold_{fold_id}.json'),
-            source_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
-            dest_patches_view=Path(rf'/data/p288722/dresden/test/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
-            keep_dest_models=False
-        )
+    from matplotlib import pyplot as plt
 
-    for num_patches in [1, 3, 10, 15]:
-        for fold_id in range(1, 6):
-            filter_patches(
-                source_patches_view=Path(
-                    rf'/data/p288722/dresden/train/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
-                dest_patches_view=Path(
-                    rf'/data/p288722/dresden/train/nat_patches_18_models_devices_128x128_{num_patches}/fold_{fold_id}.json'),
-                num_patches=num_patches)
-            filter_patches(
-                source_patches_view=Path(
-                    rf'/data/p288722/dresden/test/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
-                dest_patches_view=Path(
-                    rf'/data/p288722/dresden/test/nat_patches_18_models_devices_128x128_{num_patches}/fold_{fold_id}.json'),
-                num_patches=num_patches)
-    else:
-        print(__name__)
+    # plot the histogram of standard deviations
+
+    std_devs_r = np.load(rf'patch_std/std_devs_r_Canon_Ixus70_2.npy')
+    std_devs_g = np.load(rf'patch_std/std_devs_g_Canon_Ixus70_2.npy')
+    std_devs_b = np.load(rf'patch_std/std_devs_b_Canon_Ixus70_2.npy')
+
+    for x, color in [(std_devs_r, 'r'), (std_devs_g, 'g'), (std_devs_b, 'b')]:
+        plt.figure()
+        n, bins, patches = plt.hist(x, 100, density=True, facecolor=color, alpha=0.75)
+        plt.xlabel('Standard Deviation')
+        plt.ylabel('Count')
+        plt.title(rf'Histogram of Patch StdDev - Channel {color}')
+        plt.xlim(-0.005, 0.025)
+        plt.grid(True)
+        plt.savefig(rf'{color}.png')
+        plt.close()
+
+    # prepare_balanced_hierarchical_dataset(
+    #     source_view=Path(rf'/data/p288722/dresden/train/nat_patches_18_models_{suffix}/fold_1.json'),
+    #     dest_level='model',
+    #     max_patches=10000,
+    #     dest_view=rf'/data/p288722/dresden/train/18_models_{suffix}_10000_patches/fold_1.json')
+    #
+    # prepare_balanced_hierarchical_dataset(
+    #     source_view=Path(rf'/data/p288722/dresden/test/nat_patches_18_models_{suffix}/fold_1.json'),
+    #     dest_level='model',
+    #     max_patches=10000,
+    #     dest_view=rf'/data/p288722/dresden/test/18_models_{suffix}_10000_patches/fold_1.json')
+
+    # for fold_id in range(1, 6):
+    #     dresden_filter_patches_from_images(
+    #         source_images_view=Path(rf'/data/p288722/dresden/train/nat_images_18_devices/fold_{fold_id}.json'),
+    #         source_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
+    #         dest_patches_view=Path(rf'/data/p288722/dresden/train/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
+    #         keep_dest_models=False
+    #     )
+    #     dresden_filter_patches_from_images(
+    #         source_images_view=Path(rf'/data/p288722/dresden/test/nat_images_18_devices/fold_{fold_id}.json'),
+    #         source_patches_dir=Path(rf'/data/p288722/dresden/source_devices/nat_patches_128x128_20/'),
+    #         dest_patches_view=Path(rf'/data/p288722/dresden/test/nat_patches_18_models_devices_128x128_20/fold_{fold_id}.json'),
+    #         keep_dest_models=False
+    #     )
+
+    # for num_patches in [60, 75]:
+    #     for fold_id in range(1, 6):
+    #         filter_patches(
+    #             source_patches_view=Path(
+    #                 rf'/data/p288722/dresden/train/nat_patches_sony_models_128x128_90/fold_{fold_id}.json'),
+    #             dest_patches_view=Path(
+    #                 rf'/data/p288722/dresden/train/nat_patches_sony_models_128x128_{num_patches}/fold_{fold_id}.json'),
+    #             num_patches=num_patches)
+    #         filter_patches(
+    #             source_patches_view=Path(
+    #                 rf'/data/p288722/dresden/test/nat_patches_sony_models_128x128_90/fold_{fold_id}.json'),
+    #             dest_patches_view=Path(
+    #                 rf'/data/p288722/dresden/test/nat_patches_sony_models_128x128_{num_patches}/fold_{fold_id}.json'),
+    #             num_patches=num_patches)
+    # else:
+    #     print(__name__)
