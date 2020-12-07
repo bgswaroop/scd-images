@@ -9,6 +9,8 @@ from typing import Tuple
 import numpy as np
 import torch
 from PIL import Image, ImageFile
+from miscellaneous.scd_delivery.main.scd_modules.signature_net import SignatureNet1
+from miscellaneous.scd_delivery.main.scd_modules.similarity_net import SimilarityNet
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
@@ -77,7 +79,9 @@ class ServicesSCD:
         There are no inputs and no outputs for this method.
         WARNING: Repeated usage may lead to memory exceptions
         """
-        self.sig_net = torch.load(self.sig_net_trained_model).to(self.device)
+        self.sig_net = SignatureNet1(num_classes=58)
+        self.sig_net.load_state_dict(torch.load(self.sig_net_trained_model))
+        self.sig_net = self.sig_net.to(self.device)
         self.sig_net.eval()
 
     @staticmethod
@@ -181,7 +185,9 @@ class ServicesSCD:
         There are no inputs and no outputs for this method.
         WARNING: Repeated usage may lead to memory exceptions
         """
-        self.sim_net = torch.load(self.sim_net_trained_model).to(self.device)
+        self.sim_net = SimilarityNet()
+        self.sim_net.load_state_dict(torch.load(self.sim_net_trained_model))
+        self.sim_net = self.sim_net.to(self.device)
         self.sim_net.eval()
 
     def compute_correlation_similarity_net1(
