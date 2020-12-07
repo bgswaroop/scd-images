@@ -2,7 +2,10 @@ from collections import namedtuple
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
 import numpy as np
+import pandas as pd
 import seaborn as sn
 import sklearn.metrics
 
@@ -47,6 +50,8 @@ class VisualizationUtils:
 
     @staticmethod
     def plot_training_history(save_to_dir, history):
+
+        mpl.rcParams.update(mpl.rcParamsDefault)
 
         # Set up the paths for saving the plots
         acc_filename = str(Path(save_to_dir).joinpath("training_accuracy.png"))
@@ -98,6 +103,7 @@ class VisualizationUtils:
 
     @classmethod
     def plot_learning_rate(cls, save_to_dir, history):
+        mpl.rcParams.update(mpl.rcParamsDefault)
         filename = str(Path(save_to_dir).joinpath("optimizer_leaning_rate.png"))
 
         # Initialize the plot data
@@ -122,10 +128,6 @@ class VisualizationUtils:
 
     @classmethod
     def plot_confusion_matrix(cls, ground_truth_labels, predictions, one_hot, save_to_dir):
-        import sklearn.metrics
-        import pandas as pd
-        import seaborn as sn
-
         if one_hot:
             ground_truth_labels = [np.argmax(x) for x in ground_truth_labels]
             predictions = [np.argmax(x) for x in predictions]
@@ -145,7 +147,7 @@ class VisualizationUtils:
         ax = sn.heatmap(df_cm,
                         annot=True,
                         xticklabels=x_ticks, yticklabels=y_ticks,
-                        annot_kws={"size": 16},
+                        annot_kws={"size": 16}, fmt='d',
                         square=True,
                         vmin=0, vmax=cm_matrix.max(),
                         cbar_kws={'label': 'No. of images'})  # font size
@@ -191,6 +193,7 @@ class VisualizationUtils:
     # https://github.com/jeffheaton/t81_558_deep_learning/blob/47f5b87342fab61e19c0ee3ff46a3930cca41b1e/t81_558_class_04_2_multi_class.ipynb
     @classmethod
     def plot_roc(cls, ground_truths, predictions, save_to_dir):
+        mpl.rcParams.update(mpl.rcParamsDefault)
         fpr, tpr, _ = sklearn.metrics.roc_curve(ground_truths, predictions)
         roc_auc = sklearn.metrics.auc(fpr, tpr)
         print(roc_auc)
@@ -217,6 +220,7 @@ class VisualizationUtils:
 
     @classmethod
     def plot_scores_with_thresholds(cls, ground_truths, predictions, save_to_dir):
+        mpl.rcParams.update(mpl.rcParamsDefault)
         f1_scores = []
         mcc_scores = []
         num_thresholds = 100.0
@@ -300,7 +304,7 @@ class VisualizationUtils:
 
     @classmethod
     def plot_similarity_scores_distribution(cls, similarity_scores, ground_truths, threshold, save_to_dir):
-
+        mpl.rcParams.update(mpl.rcParamsDefault)
         positive_samples = np.where(ground_truths == 1)
         negative_samples = np.where(ground_truths == 0)
         positive_scores, negative_scores = similarity_scores[positive_samples], similarity_scores[negative_samples]
@@ -337,7 +341,6 @@ class VisualizationUtils:
 
 
 if __name__ == "__main__":
-    import logging.config
     VisualizationUtils.plot_class_wise_data_distribution(
         dataset_dir=r'/data/p288722/dresden/source_models/natural/',
         save_to_dir=r'/data/p288722/dresden/source_models/natural/'
