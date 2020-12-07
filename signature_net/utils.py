@@ -15,7 +15,7 @@ class Utils(object):
         # load the model
         runtime_dir = Configure.runtime_dir
         with open(runtime_dir.joinpath('{}.pt'.format(SigNet.name)), 'rb') as f:
-            SigNet.model = torch.load(f)
+            SigNet.model = torch.load(f)  # fixme: the model
 
         train_loader = Data.load_data_for_visualization(dataset=Configure.train_data, config_mode='train')
 

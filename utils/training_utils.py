@@ -1,9 +1,12 @@
+import logging
 import pickle
 from pathlib import Path
-import logging
+
 import torch
 
 logger = logging.getLogger(__name__)
+
+
 class Utils:
     def __init__(self):
         pass
@@ -21,7 +24,7 @@ class Utils:
         return history
 
     @staticmethod
-    def save_model_on_epoch_end(model, history, save_to_dir):
+    def save_model_on_epoch_end(model_state_dict, optimizer_state_dict, scheduler_state_dict, history, save_to_dir):
         train_loss = str(round(history['loss'][-1], 4)).ljust(4, '0')
         val_loss = str(round(history['val_loss'][-1], 4)).ljust(4, '0')
         if history['accuracy'][-1] and history['val_accuracy'][-1]:
@@ -32,11 +35,15 @@ class Utils:
             val_accuracy = None
 
         epoch = str(history['epochs'][-1]).zfill(3)
-        torch.save(model, save_to_dir.joinpath('epoch{}_loss{}_valLoss{}_acc{}_valAcc{}.pt'.
-                                               format(epoch, train_loss, val_loss, train_accuracy, val_accuracy)))
+        params_to_save = {'model_state_dict': model_state_dict,
+                          'optimizer_state_dict': optimizer_state_dict,
+                          'scheduler_state_dict': scheduler_state_dict}
+        torch.save(params_to_save, save_to_dir.joinpath('epoch{}_loss{}_valLoss{}_acc{}_valAcc{}.pt'.
+                                                        format(epoch, train_loss, val_loss, train_accuracy,
+                                                               val_accuracy)))
 
     @staticmethod
-    def prepare_for_training(pre_trained_models_dir, model):
+    def prepare_for_training(pre_trained_models_dir, model, optimizer, scheduler):
         initial_epoch = 1
         history = {'epochs': [], 'learning_rate': [], 'accuracy': [], 'loss': [], 'val_accuracy': [], 'val_loss': []}
 
@@ -49,13 +56,16 @@ class Utils:
                 pre_trained_model_path = model_path
 
         if pre_trained_model_path:
-            model = torch.load(pre_trained_model_path)
+            params = torch.load(pre_trained_model_path)
             filename = Path(pre_trained_models_dir).joinpath('history.pkl')
             if filename.exists():
                 with open(str(filename), 'rb') as f:
                     history = pickle.load(f)
+            model.load_state_dict(params['model_state_dict'])
+            optimizer.load_state_dict(params['optimizer_state_dict'])
+            scheduler.load_state_dict(params['scheduler_state_dict'])
 
-        return initial_epoch, history, model
+        return initial_epoch, history, model, optimizer, scheduler
 
     @staticmethod
     def save_best_model(pre_trained_models_dir, destination_dir, history, name):
@@ -77,9 +87,15 @@ class Utils:
         import numpy as np
         num_decimals = 4
 
+        shortlisted_epochs = range(len(history['val_loss']))
+        if 'val_accuracy' in history:
+            val_acc = np.round(history['val_accuracy'], decimals=num_decimals)
+            shortlisted_epochs = np.where(val_acc == np.max(val_acc))[0]
+
         # Filter 1: Find models with least validation/test loss
-        val_loss = np.round(history['val_loss'], decimals=num_decimals)
-        shortlisted_epochs = np.where(val_loss == np.min(val_loss))[0]
+        if len(shortlisted_epochs) > 1:
+            val_loss = np.round(history['val_loss'], decimals=num_decimals)
+            shortlisted_epochs = np.where(val_loss == np.min(val_loss[shortlisted_epochs]))[0]
 
         # Filter 2: Find models with least train loss
         if len(shortlisted_epochs) > 1:

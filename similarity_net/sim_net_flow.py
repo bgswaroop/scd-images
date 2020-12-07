@@ -57,7 +57,8 @@ class SimNetFlow(object):
         train_loader = Data.load_data(config_mode='train')
         test_loader = Data.load_data(config_mode='test')
 
-        init_epoch, history, SimNet.model = Utils.prepare_for_training(Configure.simnet_dir, SimNet.model)
+        init_epoch, history, SimNet.model, SimNet.optimizer, SimNet.scheduler = \
+            Utils.prepare_for_training(Configure.simnet_dir, SimNet.model, SimNet.optimizer, SimNet.scheduler)
         for epoch in range(init_epoch, SimNet.epochs + 1):
             # Train
             SimNet.model.train()
@@ -89,7 +90,8 @@ class SimNetFlow(object):
             # Log epoch statistics
             Utils.update_history(history, epoch, train_loss, val_loss, train_acc, val_acc, lr, Configure.simnet_dir)
             VisualizationUtils.plot_learning_statistics(history, Configure.simnet_dir)
-            Utils.save_model_on_epoch_end(SimNet.model, history, Configure.simnet_dir)
+            Utils.save_model_on_epoch_end(SimNet.model.state_dict(), SimNet.optimizer.state_dict(),
+                                          SimNet.scheduler.state_dict(), history, Configure.simnet_dir)
 
             logger.info(f"epoch : {epoch}/{SimNet.epochs}, "
                         f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
@@ -111,7 +113,8 @@ class SimNetFlow(object):
         """
         if not pre_trained_model_path:
             pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SimNet.name))
-        SimNet.model = torch.load(pre_trained_model_path)
+        params = torch.load(pre_trained_model_path)
+        SimNet.model.load_state_dict(params['model_state_dict'])
 
         if config_mode == 'train':
             data_loader = Data.load_data(config_mode=config_mode)
