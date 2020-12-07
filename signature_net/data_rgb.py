@@ -62,12 +62,12 @@ class Data(object):
         :param balance_classes: a boolean value
         :return: a torch dataset
         """
-        if Path(image_paths).is_dir():
-            image_paths = list(Path(image_paths).glob('*/*'))
-            labels = None
+        labels = None
+        if isinstance(image_paths, list):
             if balance_classes:
                 raise NotImplementedError
-        elif isinstance(image_paths, list):
+        elif Path(image_paths).is_dir():
+            image_paths = list(Path(image_paths).glob('*/*'))
             if balance_classes:
                 raise NotImplementedError
         elif Path(image_paths).suffix == '.json':
@@ -106,10 +106,10 @@ class Data(object):
         # Prepare for processing
         if config_mode == 'train':
             dataset = cls.prepare_torch_dataset(image_paths=dataset, balance_classes=True)
-            return torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=True, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=True, num_workers=12)
         elif config_mode == 'test':
             dataset = cls.prepare_torch_dataset(image_paths=dataset, balance_classes=False)
-            return torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4)
+            return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=12)
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):
