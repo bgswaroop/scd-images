@@ -1,8 +1,8 @@
+import json
 from pathlib import Path
 
 import torch
 from torch import optim, nn
-import json
 
 from signature_net.models import SignatureNet1
 from similarity_net.models import SimilarityNet
@@ -12,16 +12,13 @@ from utils.cost_functions import CategoricalCrossEntropyLoss
 class Configure(object):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    train_data = Path(rf'/data/p288722/dresden/train/18_models_128x128_5/fold_1.json')
+    test_data = Path(rf'/data/p288722/dresden/test/18_models_128x128_5/fold_1.json')
+    tar_file = rf'/data/p288722/dresden/source_devices/nat_patches_128x128_5.tar'
 
-    train_data = rf'/data/p288722/dresden/train/nat_patches_18_models_128x128_100/fold_{1}.json'
-    test_data = rf'/data/p288722/dresden/test/nat_patches_18_models_128x128_100/fold_{1}.json'
+    # data = r'D:\Data\INCIBE_dataset\source_devices'
 
-    # train_data = rf'/data/p288722/dresden/train/nat_patches_18_models_128x128_15/fold_1.json'
-    # test_data = rf'/data/p288722/dresden/test/nat_patches_18_models_128x128_15/fold_1.json'
-    data = r'D:\Data\INCIBE_dataset\source_devices'
-
-    # runtime_dir = Path(__file__).parent.absolute().joinpath('runtime_dir_scd')
-    runtime_dir = Path(r'/scratch/p288722/runtime_data/scd_pytorch/sony_models')
+    runtime_dir = Path(r'/scratch/p288722/runtime_data/scd_pytorch/dev')
 
     sig_net_name = 'signature_net'
     sim_net_name = 'similarity_net'
@@ -64,7 +61,7 @@ class SigNet(object):
 
     criterion = CategoricalCrossEntropyLoss()
 
-    epochs = 50
+    epochs = 3
 
     @classmethod
     def update_model(cls, num_classes, is_constrained=False):

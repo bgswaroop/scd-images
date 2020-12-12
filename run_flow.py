@@ -1,7 +1,14 @@
+import argparse
+import json
 import logging
 import pickle
+import shutil
+
+import numpy as np
 
 from configure import Configure, SigNet, SimNet
+from miscellaneous.prepare_image_and_patch_data import level_balanced_from_hierarchical_dataset, \
+    level_from_hierarchical_dataset
 from signature_net.sig_net_flow import SigNetFlow
 from similarity_net.sim_net_flow import SimNetFlow
 from utils.evaluation_metrics import MultinomialClassificationScores
@@ -9,7 +16,6 @@ from utils.logging import SetupLogger, log_running_time
 from utils.visualization_utils import VisualizationUtils
 
 logger = logging.getLogger(__name__)
-import argparse
 
 
 @log_running_time
@@ -70,116 +76,77 @@ def run_cross_validation_flow():
         SimNetFlow.classify()
 
 
-def run_flow_hierarchial():
-    import json
-    from pathlib import Path
-    import datetime
-    import shutil
-
+@log_running_time
+def run_flow_hierarchical():
+    # Step 0: Create a temp dir to save the dataset views
     temp_dir = Configure.runtime_dir.joinpath('temp')
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(exist_ok=True, parents=True)
+    hierarchical_train_data_filepath, hierarchical_test_data_filepath = Configure.train_data, Configure.test_data
 
-    # Step 1 : Brand level training and classification
-    def create_brands_dataset_from_models(filename):
-        with open(filename, 'r') as f:
-            models_dict = json.load(f)['file_paths']
-        brands_dict = {}
-        for model_name in sorted(models_dict.keys()):
-            brand_name = model_name.split('_')[0]
-            if brand_name not in brands_dict:
-                brands_dict[brand_name] = []
-            brands_dict[brand_name].extend(models_dict[model_name])
-        timestamp = str(datetime.datetime.now()).replace(' ', '').replace('-', '').replace(':', '').replace('.', '')
-        modified_json_file = temp_dir.joinpath(f'{timestamp}_brands_{Path(filename).name}')
-        with open(modified_json_file, 'w+') as f:
-            json.dump({'file_paths': brands_dict}, f, indent=2)
-        return modified_json_file
-
-    source_train_data, source_test_data = Configure.train_data, Configure.test_data
-    Configure.train_data = create_brands_dataset_from_models(source_train_data)
-    Configure.test_data = create_brands_dataset_from_models(source_test_data)
-
-    with open(Configure.train_data, 'r') as f:
-        brands_dataset = json.load(f)['file_paths']
-        num_classes = len(brands_dataset)
-        SigNet.update_model(num_classes, is_constrained=False)
-
+    # Step 1: Brand level training and classification
+    target_level = 'brand'
+    Configure.train_data = temp_dir.joinpath(rf'train_{target_level}_2000_fold_{fold_id}.json')
+    brands_dataset_train = level_balanced_from_hierarchical_dataset(source_view=hierarchical_train_data_filepath,
+                                                                    dest_level=target_level,
+                                                                    max_patches=2000, dest_view=Configure.train_data)
+    Configure.test_data = temp_dir.joinpath(rf'test_{target_level}_fold_{fold_id}.json')
+    brands_dataset_test = level_from_hierarchical_dataset(source_view=hierarchical_test_data_filepath,
+                                                          dest_level=target_level,
+                                                          dest_view=Configure.test_data)
+    SigNet.update_model(num_classes=len(brands_dataset_train), is_constrained=False)
     Configure.sig_net_name = f'signature_net_brands'
     Configure.update()
 
     SigNetFlow.train()
     SigNetFlow.classify()
 
-    # Step 2: model level training and classification
-    def create_multi_models_datasets_from_models_dataset(filename):
-        with open(filename, 'r') as f:
-            models_dict = json.load(f)['file_paths']
-        brands_dict = {}
-        for model_name in sorted(models_dict.keys()):
-            brand_name = model_name.split('_')[0]
-            if brand_name not in brands_dict:
-                brands_dict[brand_name] = {model_name: models_dict[model_name]}
-            else:
-                brands_dict[brand_name][model_name] = models_dict[model_name]
+    # Step 2: Model level training and classification
+    with open(hierarchical_train_data_filepath, 'r') as f:
+        hierarchical_train_data = json.load(f)['file_paths']
+    with open(hierarchical_test_data_filepath, 'r') as f:
+        hierarchical_test_data = json.load(f)['file_paths']
 
-        modified_files = []
-        for brand_name in brands_dict:
-            if len(brands_dict[brand_name]) > 1:
-                timestamp = str(datetime.datetime.now()).replace(' ', '').replace('-', '').replace(':', '').replace('.',
-                                                                                                                    '')
-                modified_json_file = temp_dir.joinpath(f'{timestamp}_{brand_name}_{Path(filename).name}')
-                with open(modified_json_file, 'w+') as f:
-                    json.dump({'file_paths': brands_dict[brand_name]}, f, indent=2)
-                modified_files.append(modified_json_file)
-
-        return modified_files
-
-    train_data_models = create_multi_models_datasets_from_models_dataset(source_train_data)
-    test_data_models = create_multi_models_datasets_from_models_dataset(source_test_data)
-
-    camera_model_ids = {}
-    camera_brand_names = {brand_name: idx for idx, brand_name in enumerate(sorted(brands_dataset.keys()))}
-    camera_brand_ids = {idx: brand_name for idx, brand_name in enumerate(sorted(brands_dataset.keys()))}
-
-    for train_data, test_data in zip(train_data_models, test_data_models):
-        Configure.train_data = train_data
-        Configure.test_data = test_data
-        with open(Configure.train_data, 'r') as f:
-            num_classes = len(json.load(f)['file_paths'])
-        SigNet.update_model(num_classes, is_constrained=False)
-
-        brand_name = train_data.stem.split("_")[1]
-        Configure.sig_net_name = f'signature_net_{brand_name}'
-        camera_model_ids[camera_brand_names[brand_name]] = Configure.sig_net_name
+    target_level = 'model'
+    for current_brand in ['Nikon', 'Samsung', 'Sony']:
+        Configure.train_data = temp_dir.joinpath(rf'train_{target_level}_{current_brand}_500_fold_{fold_id}.json')
+        models_dataset_train = level_balanced_from_hierarchical_dataset(
+            source_view={current_brand: hierarchical_train_data[current_brand]}, dest_level=target_level,
+            max_patches=500, dest_view=Configure.train_data
+        )
+        Configure.test_data = temp_dir.joinpath(rf'test_{target_level}_{current_brand}_fold_{fold_id}.json')
+        models_dataset_test = level_from_hierarchical_dataset(
+            source_view={current_brand: hierarchical_test_data[current_brand]}, dest_level=target_level,
+            dest_view=Configure.test_data
+        )
+        SigNet.update_model(num_classes=len(models_dataset_train), is_constrained=False)
+        Configure.sig_net_name = f'signature_net_{current_brand}'
         Configure.update()
 
         SigNetFlow.train()
         SigNetFlow.classify()
 
-    # Classify at brand level
+    # Step 3: Classify at brand level
+    target_level = 'brand'
     Configure.sig_net_name = f'signature_net_brands'
-    Configure.train_data = create_brands_dataset_from_models(source_train_data)
-    Configure.test_data = create_brands_dataset_from_models(source_test_data)
+    Configure.test_data = temp_dir.joinpath(rf'test_{target_level}_fold_{fold_id}.json')
     Configure.update()
-    with open(Configure.train_data, 'r') as f:
-        num_classes = len(json.load(f)['file_paths'])
-    SigNet.update_model(num_classes, is_constrained=False)
+    SigNet.update_model(num_classes=len(brands_dataset_train), is_constrained=False)
     SigNet.model.eval()
     image_paths, brand_predictions, brand_pred_scores = SigNetFlow.predict(Configure.test_data)
 
-    import numpy as np
+    brand_names = brands_dataset_train.keys()
+    target_level = 'model'
     model_predictions = np.zeros_like(brand_predictions)
-    for idx, brand_id in enumerate(camera_model_ids):
+    for brand_name, brand_id in [(x, brand_names.index(x)) for x in ['Nikon', 'Samsung', 'Sony']]:
         indices = np.where(brand_predictions == brand_id)[0]
         if len(indices) > 0:
             filtered_image_paths = np.array(image_paths)[indices.astype(int)]
-            Configure.sig_net_name = f'signature_net_{camera_brand_ids[brand_id]}'
-            Configure.test_data = test_data_models[idx]
-            Configure.train_data = train_data_models[idx]
+            Configure.sig_net_name = f'signature_net_{brand_name}'
+            Configure.test_data = temp_dir.joinpath(rf'test_{target_level}_{brand_name}_fold_{fold_id}.json')
             Configure.update()
-            with open(Configure.train_data, 'r') as f:
+            with open(Configure.test_data, 'r') as f:
                 num_classes = len(json.load(f)['file_paths'])
             SigNet.update_model(num_classes, is_constrained=False)
             filtered_image_paths = [str(x) for x in filtered_image_paths]
@@ -190,24 +157,24 @@ def run_flow_hierarchial():
 
     # Merge brand and model level predictions
     predictions = brand_predictions * 10 + model_predictions
-    labels_correction_map = {pr: idx for idx, pr in
-                             enumerate(sorted(set(predictions)))}  # this kind of labelling is misl
+    model_ids = []
+    for brand_id, brand in enumerate(sorted(hierarchical_train_data.keys())):
+        for model_id, model in enumerate(sorted(hierarchical_train_data[brand].keys())):
+            model_ids.append(10*brand_id + model_id)
+    labels_correction_map = {pr: idx for idx, pr in enumerate(model_ids)}
     predictions = [labels_correction_map[x] for x in predictions]
 
     model_path_to_gt_dict = {}
-
-    with open(source_test_data, 'r') as f:
+    with open(hierarchical_test_data_filepath, 'r') as f:
         test_data_dict = json.load(f)['file_paths']
         model_name_to_gt_label = {model_name: idx for idx, model_name in enumerate(sorted(test_data_dict.keys()))}
         for model_name in test_data_dict.keys():
             for path in test_data_dict[model_name]:
                 model_path_to_gt_dict[path] = model_name_to_gt_label[model_name]
 
-    ground_truths = []
-    for path in image_paths:
-        ground_truths.append(model_path_to_gt_dict[path])
+    ground_truths = [model_path_to_gt_dict[x] for x in image_paths]
 
-    # fixme: predicted scores is not being passed correctly
+    # fixme: predicted_scores is not being passed correctly
     ground_truths, predictions = SigNetFlow.patch_to_image(ground_truths, predictions, image_paths,
                                                            aggregation_method='majority_vote')
 
@@ -237,13 +204,18 @@ if __name__ == '__main__':
     # fold_id = args.fold
     # num_patches = args.num_patches
     fold_id = 1
-    num_patches = 100
+    # num_patches = 100
+    #
+    # Configure.runtime_dir = Path(
+    #     rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hierarchial_4/fold_{fold_id}')
+    # Configure.train_data = rf'/data/p288722/dresden/train/nat_patches_18_models_128x128_100/fold_{fold_id}.json'
+    # Configure.test_data = rf'/data/p288722/dresden/test/nat_patches_18_models_128x128_100/fold_{fold_id}.json'
+    # Configure.update()
 
-    Configure.runtime_dir = Path(
-        rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hierarchial_4/fold_{fold_id}')
-    Configure.train_data = rf'/data/p288722/dresden/train/nat_patches_18_models_128x128_100/fold_{fold_id}.json'
-    Configure.test_data = rf'/data/p288722/dresden/test/nat_patches_18_models_128x128_100/fold_{fold_id}.json'
-    Configure.update()
+    # import tarfile
+    # with tarfile.open(Configure.tar_file, 'r:') as tar:
+    #     member = tar.getmember('Rollei_RCP-7325XS_2/Rollei_RCP-7325XS_2_43235_004.JPG')
+    #     pass
 
     SetupLogger(log_file=Configure.runtime_dir.joinpath(f'scd_{fold_id}_exp.log'))
     for item in [Configure, SigNet, SimNet]:
@@ -253,7 +225,8 @@ if __name__ == '__main__':
     try:
         # run_cross_validation_flow()
         # run_flow(fold_id)
-        run_flow_hierarchial()
+        run_flow_hierarchical()
     except Exception as e:
         logger.error(e)
+        print(e)
         raise e

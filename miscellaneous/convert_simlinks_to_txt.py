@@ -56,10 +56,11 @@ def convert_txt_to_json(text_file_path):
 
 
 if __name__ == '__main__':
-    import shutil
+
     for item in Path(rf'/data/p288722/dresden/train').glob('natural'):
         if item.is_dir():
             replace_symlink_json_files(dataset_dir=item)
+            # import shutil
             # shutil.rmtree(item)
 
     for item in Path(rf'/data/p288722/dresden/test').glob('natural'):

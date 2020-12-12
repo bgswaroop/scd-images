@@ -67,8 +67,8 @@ class SigNetFlow(object):
         torch.manual_seed(0)
 
         # Prepare the data
-        train_loader = Data.load_data(dataset=Configure.train_data, config_mode='train')
-        test_loader = Data.load_data(dataset=Configure.test_data, config_mode='test')
+        train_loader = Data.load_data(dataset=Configure.train_data, config_mode='train', tar_file=Configure.tar_file)
+        test_loader = Data.load_data(dataset=Configure.test_data, config_mode='test', tar_file=Configure.tar_file)
 
         with open(Configure.train_data, 'r') as f:
             dataset_dict = json.load(f)
@@ -145,9 +145,11 @@ class SigNetFlow(object):
         SigNet.model.load_state_dict(params['model_state_dict'])
 
         if config_mode == 'train' and not images_dir:
-            data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode)
+            data_loader = Data.load_data(dataset=Configure.train_data, config_mode=config_mode,
+                                         tar_file=Configure.tar_file)
         elif config_mode == 'test' and not images_dir:
-            data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode)
+            data_loader = Data.load_data(dataset=Configure.test_data, config_mode=config_mode,
+                                         tar_file=Configure.tar_file)
         elif images_dir:
             data_loader = Data.load_data(dataset=images_dir, config_mode=config_mode)
         else:
@@ -256,7 +258,7 @@ class SigNetFlow(object):
     def predict(cls, prediction_data, pre_trained_model_path=None):
         """
         Method to extract signatures and labels
-        :param config_mode: string - train / test
+        :param prediction_data:
         :param pre_trained_model_path: (optional) Pre-trained model path
         :return: list of labelled signatures
         """
@@ -265,7 +267,7 @@ class SigNetFlow(object):
         params = torch.load(pre_trained_model_path)
         SigNet.model.load_state_dict(params['model_state_dict'])
         SigNet.model.eval()
-        data_loader = Data.load_data(dataset=prediction_data, config_mode='test')
+        data_loader = Data.load_data(dataset=prediction_data, config_mode='test', tar_file=Configure.tar_file)
 
         num_batches = len(data_loader)
         predictions, prediction_scores = [None] * num_batches, [None] * num_batches
@@ -330,6 +332,7 @@ class SigNetFlow(object):
     def patch_to_image(ground_truths, predictions, image_paths, aggregation_method, prediction_scores=None):
         """
         Convert the patch level predictions to image level predictions.
+        :param prediction_scores:
         :param ground_truths:
         :param predictions:
         :param image_paths:

@@ -1,17 +1,20 @@
+import json
+import logging
+import random
+import tarfile
 from pathlib import Path
 
+import numpy as np
 import torch
 import torchvision
 from PIL import Image
-import json
-import numpy as np
-import random
-import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PerChannelMeanSubtraction:
     """Per channel mean subtraction"""
+
     def __init__(self):
         pass
 
@@ -24,30 +27,43 @@ class PerChannelMeanSubtraction:
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, list_ids, labels, transform=None):
+    # namedtuple('')
+
+    def __init__(self, image_ids, labels, tar_file=None, transform=None):
         """Initialization"""
         self.labels = labels
-        self.list_ids = list_ids
+        self.image_ids = image_ids
         self.transform = transform
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tar = tarfile.open(tar_file, 'r:') if tar_file else None
+        logger.info(f'No. members in tar: {len(self.tar.getmembers())}')
 
     def __len__(self):
         """Denotes the total number of samples"""
-        return len(self.list_ids)
+        return len(self.image_ids)
 
     def __getitem__(self, index):
         """Generates one sample of data"""
         # Select sample
-        ID = self.list_ids[index]
+        image_id = self.image_ids[index]
 
         # Load data and get label
-        X = Image.open(ID)
-        y = self.labels[ID]
+        try:
+            X = Image.open(self.tar.extractfile(image_id)) if self.tar else Image.open(image_id)
+        except Exception as e:
+            logger.info(e)
+            raise e
+
+        y = self.labels[image_id]
 
         if self.transform:
             X = self.transform(X)
 
         return X, y
+
+    def __del__(self):
+        if self.tar:
+            self.tar.close()
 
 
 class Data(object):
@@ -56,22 +72,24 @@ class Data(object):
          PerChannelMeanSubtraction()])
 
     @classmethod
-    def prepare_torch_dataset(cls, image_paths, balance_classes):
+    def prepare_torch_dataset(cls, dataset_file, balance_classes, tar_file=None):
         """
-        :param image_paths: dataset directory or a list containing image paths
+        :param tar_file:
+        :param dataset_file: dataset directory or a list containing image paths
         :param balance_classes: a boolean value
         :return: a torch dataset
         """
         labels = None
-        if isinstance(image_paths, list):
+        if isinstance(dataset_file, list):
             if balance_classes:
                 raise NotImplementedError
-        elif Path(image_paths).is_dir():
-            image_paths = list(Path(image_paths).glob('*/*'))
+            image_paths = dataset_file
+        elif Path(dataset_file).is_dir():
+            image_paths = list(Path(dataset_file).glob('*/*'))
             if balance_classes:
                 raise NotImplementedError
-        elif Path(image_paths).suffix == '.json':
-            with open(image_paths, 'r') as f:
+        elif Path(dataset_file).suffix == '.json':
+            with open(dataset_file, 'r') as f:
                 image_paths_dict = json.load(f)
             image_paths, labels = [], []
 
@@ -92,23 +110,24 @@ class Data(object):
                         paths = random.sample(paths, k=num_images_per_class)
 
                 image_paths += paths
-                labels += [device_name]*len(paths)
+                labels += [device_name] * len(paths)
 
         logger.info(f'Total number of images: {len(image_paths)}')
         class_labels = cls.compute_one_hot_labels(dataset=image_paths, labels=labels)
         img_labels = {x: (y, str(x)) for x, y in zip(image_paths, class_labels)}
-        dataset = Dataset(list_ids=image_paths, labels=img_labels, transform=cls.rgb_image_transform)
+        dataset = Dataset(image_ids=image_paths, labels=img_labels, tar_file=tar_file,
+                          transform=cls.rgb_image_transform)
 
         return dataset
 
     @classmethod
-    def load_data(cls, dataset, config_mode):
+    def load_data(cls, dataset, config_mode, tar_file=None):
         # Prepare for processing
         if config_mode == 'train':
-            dataset = cls.prepare_torch_dataset(image_paths=dataset, balance_classes=True)
+            dataset = cls.prepare_torch_dataset(dataset_file=dataset, balance_classes=False, tar_file=tar_file)
             return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=True, num_workers=12)
         elif config_mode == 'test':
-            dataset = cls.prepare_torch_dataset(image_paths=dataset, balance_classes=False)
+            dataset = cls.prepare_torch_dataset(dataset_file=dataset, balance_classes=False, tar_file=tar_file)
             return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=12)
 
     @classmethod

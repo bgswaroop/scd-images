@@ -9,6 +9,7 @@ from typing import Tuple
 import numpy as np
 import torch
 from PIL import Image, ImageFile
+
 from miscellaneous.scd_delivery.main.scd_modules.signature_net import SignatureNet1
 from miscellaneous.scd_delivery.main.scd_modules.similarity_net import SimilarityNet
 

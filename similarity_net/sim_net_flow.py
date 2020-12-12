@@ -1,8 +1,8 @@
 import logging
+import pickle
 from pathlib import Path
 from time import perf_counter
 
-import pickle
 import numpy as np
 import torch
 
