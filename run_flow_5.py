@@ -1,8 +1,12 @@
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import argparse
 import json
 import logging
 import pickle
 import shutil
+from shutil import copy2
 
 import numpy as np
 
@@ -10,6 +14,7 @@ from configure import Configure, SigNet, SimNet
 from miscellaneous.prepare_image_and_patch_data import level_balanced_from_hierarchical_dataset, \
     level_from_hierarchical_dataset
 from signature_net.sig_net_flow import SigNetFlow
+from similarity_net.sim_net_flow import SimNetFlow
 from utils.evaluation_metrics import MultinomialClassificationScores
 from utils.logging import SetupLogger, log_running_time
 from utils.visualization_utils import VisualizationUtils
@@ -25,40 +30,15 @@ def run_flow():
     """
 
     # Signature Net
-    # Config
-    patch_aggregation = SigNet.patch_aggregation
-
-    # Step 0: Create a temp dir to save the dataset views
-    temp_dir = Configure.runtime_dir.joinpath('temp')
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
-    temp_dir.mkdir(exist_ok=True, parents=True)
-    hierarchical_train_data_filepath, hierarchical_test_data_filepath = \
-        Configure.train_data_config, Configure.test_data_config
-
-    # Step 1: Model level training and classification
-    target_level = 'model'
-    Configure.train_data_config = temp_dir.joinpath(rf'train_{target_level}_fold_{fold_id}.json')
-    models_dataset_train = level_balanced_from_hierarchical_dataset(source_view=hierarchical_train_data_filepath,
-                                                                    dest_level=target_level,
-                                                                    max_patches=SigNet.samples_per_class,
-                                                                    dest_view=Configure.train_data_config)
-    Configure.test_data_config = temp_dir.joinpath(rf'test_{target_level}_fold_{fold_id}.json')
-    level_from_hierarchical_dataset(source_view=hierarchical_test_data_filepath,
-                                    dest_level=target_level,
-                                    dest_view=Configure.test_data_config)
-
-    SigNet.update_model(num_classes=len(models_dataset_train), is_constrained=False)
-    Configure.sig_net_name = f'signature_net_models'
-    Configure.update()
-
-    # SigNetFlow.train()
-    SigNetFlow.classify(aggregation_method=patch_aggregation)
+    SigNetFlow.train()
+    SigNetFlow.classify(aggregation_method='majority_vote')
+    SigNetFlow.classify(aggregation_method='prediction_score_sum')
+    SigNetFlow.classify(aggregation_method='log_scaled_prediction_score_sum')
 
     # Similarity Net
-    # SimNetFlow.train()
-    # SimNet.balance_classes = False
-    # SimNetFlow.classify()
+    SimNetFlow.train()
+    SimNet.balance_classes = False
+    SimNetFlow.classify()
 
 
 @log_running_time
@@ -66,15 +46,15 @@ def run_flow_hierarchical():
     # Config
     patch_aggregation = SigNet.patch_aggregation
 
-    # Step 0: Create a temp dir to save the dataset views
+    # # Step 0: Create a temp dir to save the dataset views
     temp_dir = Configure.runtime_dir.joinpath('temp')
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
+    # if temp_dir.exists():
+    #     shutil.rmtree(temp_dir)
     temp_dir.mkdir(exist_ok=True, parents=True)
     hierarchical_train_data_filepath, hierarchical_test_data_filepath = \
         Configure.train_data_config, Configure.test_data_config
-
-    # Step 1: Brand level training and classification
+    #
+    # # Step 1: Brand level training and classification
     target_level = 'brand'
     Configure.train_data_config = temp_dir.joinpath(rf'train_{target_level}_fold_{fold_id}.json')
     brands_dataset_train = level_balanced_from_hierarchical_dataset(source_view=hierarchical_train_data_filepath,
@@ -89,8 +69,8 @@ def run_flow_hierarchical():
     Configure.sig_net_name = f'signature_net_brands'
     Configure.update()
 
-    SigNetFlow.train()
-    SigNetFlow.classify(aggregation_method=patch_aggregation)
+    # SigNetFlow.train()
+    # SigNetFlow.classify(aggregation_method=patch_aggregation)
 
     # Step 2: Model level training and classification
     with open(hierarchical_train_data_filepath, 'r') as f:
@@ -116,8 +96,8 @@ def run_flow_hierarchical():
         Configure.sig_net_name = f'signature_net_{current_brand}'
         Configure.update()
 
-        SigNetFlow.train()
-        SigNetFlow.classify(aggregation_method=patch_aggregation)
+        # SigNetFlow.train()
+        # SigNetFlow.classify(aggregation_method=patch_aggregation)
 
     # Step 3: Classify at brand level
     target_level = 'brand'
@@ -195,6 +175,10 @@ def run_flow_hierarchical():
                                              save_to_dir=Configure.runtime_dir.joinpath('signature_net'))
 
 
+def run_flow_hierarchical_balanced():
+    pass
+
+
 if __name__ == '__main__':
     import inspect
     from pathlib import Path
@@ -209,66 +193,53 @@ if __name__ == '__main__':
     args = parser.parse_args()
     fold_id = args.fold
     num_patches = args.num_patches
+    patch_aggregation = args.patch_aggregation
+    use_contributing_patches = bool(args.use_contributing_patches)
     patches_type = args.patches_type
 
-    SigNet.use_contributing_patches = bool(args.use_contributing_patches)
-    SigNet.patch_aggregation = args.patch_aggregation
-
     if patches_type == "random" or patches_type == "non_homo":
-        Configure.train_data_config = Path(
-            rf'/data/p288722/dresden/train/18_models_{patches_type}_128x128_{num_patches}/fold_{fold_id}.json')
         Configure.test_data_config = Path(
-            rf'/data/p288722/dresden/test/18_models_{patches_type}_128x128_25/fold_{fold_id}.json')
+            rf'/data/p288722/dresden/test/18_models_{patches_type}_128x128_{num_patches}/fold_{fold_id}.json')
+        Configure.train_data_config = Configure.test_data_config
         Configure.dataset_folder = \
-            rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_{patches_type}_128x128_{num_patches}'
+            rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_{patches_type}_128x128_400'
         Configure.runtime_dir = Path(
-            rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_{patches_type}_1/fold_{fold_id}')
-    elif patches_type == 'homo':
-        # do not modify this till the experiment starts to run
-        Configure.train_data_config = Path(
-            rf'/data/p288722/dresden/train/18_models_from200_128x128_{num_patches}/fold_{fold_id}.json')
-        Configure.test_data_config = Path(
-            rf'/data/p288722/dresden/test/18_models_from200_128x128_{num_patches}/fold_{fold_id}.json')
-        Configure.dataset_folder = \
-            rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_128x128_{num_patches}'
-        Configure.runtime_dir = Path(
-            rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_flat_1/fold_{fold_id}')
-
+            rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_{patches_type}_2/test_{num_patches}/fold_{fold_id}')
         Configure.update()
+        source_root = Path(rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_{patches_type}_1/fold_{fold_id}/')
 
-        SetupLogger(log_file=Configure.runtime_dir.joinpath(
-            f'scd_{SigNet.patch_aggregation}_use_contributing_patches_{SigNet.use_contributing_patches}.log'))
-        for item in [Configure, SigNet, SimNet]:
-            logger.info(f'---------- {item.__name__} ----------')
-            for name, value in inspect.getmembers(item)[26:]:
-                logger.info(f'{name.ljust(20)}: {value}')
-        try:
-            run_flow()
-        except Exception as e:
-            logger.error(e)
-            print(e)
-            raise e
     else:
-        Configure.train_data_config = Path(
-            rf'/data/p288722/dresden/train/18_models_from200_128x128_{num_patches}/fold_{fold_id}.json')
         Configure.test_data_config = Path(
-            rf'/data/p288722/dresden/test/18_models_from200_128x128_{num_patches}/fold_{fold_id}.json')
-        Configure.dataset_folder = \
-            rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_128x128_{num_patches}'
+            rf'/data/p288722/dresden/test/18_models_128x128_{num_patches}/fold_{fold_id}.json')
+        Configure.train_data_config = Configure.test_data_config
+        Configure.dataset_folder = rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_128x128_400'
         Configure.runtime_dir = Path(
-            rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_flat_1/fold_{fold_id}')
-
+            rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_09/test_{num_patches}/fold_{fold_id}')
         Configure.update()
+        source_root = Path(rf'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_08/fold_{fold_id}/')
 
-        SetupLogger(log_file=Configure.runtime_dir.joinpath(
-            f'scd_{SigNet.patch_aggregation}_use_contributing_patches_{SigNet.use_contributing_patches}.log'))
-        for item in [Configure, SigNet, SimNet]:
-            logger.info(f'---------- {item.__name__} ----------')
-            for name, value in inspect.getmembers(item)[26:]:
-                logger.info(f'{name.ljust(20)}: {value}')
-        try:
-            run_flow()
-        except Exception as e:
-            logger.error(e)
-            print(e)
-            raise e
+    # Copy the necessary files
+    for f in list(source_root.glob("*.pt")):
+        copy2(f, Configure.runtime_dir)
+
+    for folder in ['signature_net_brands', 'signature_net_Nikon', 'signature_net_Samsung',
+                   'signature_net_Sony']:
+        for f in list(source_root.joinpath(folder).glob("*")):
+            copy2(f, Configure.runtime_dir.joinpath(folder))
+
+    SigNet.use_contributing_patches = use_contributing_patches
+    SigNet.patch_aggregation = patch_aggregation
+
+    SetupLogger(log_file=Configure.runtime_dir.joinpath(
+        f'scd_{SigNet.patch_aggregation}_use_contributing_patches_{SigNet.use_contributing_patches}.log'))
+    for item in [Configure, SigNet, SimNet]:
+        logger.info(f'---------- {item.__name__} ----------')
+        for name, value in inspect.getmembers(item)[26:]:
+            logger.info(f'{name.ljust(20)}: {value}')
+
+    try:
+        run_flow_hierarchical()
+    except Exception as e:
+        logger.error(e)
+        print(e)
+        raise e

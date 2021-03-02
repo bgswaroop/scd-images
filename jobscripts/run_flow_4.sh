@@ -1,14 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name=flat
-#SBATCH --time=2:00:00
+#SBATCH --job-name=dev1
+#SBATCH --time=24:00:00
 #SBATCH --mem=32000
-#SBATCH --cpus-per-task=8
-#SBATCH --partition=gpushort
+#SBATCH --cpus-per-task=12
+#SBATCH --partition=gpu
 #SBATCH --gres=gpu:v100:1
-#SBATCH --ntasks=1
-#SBATCH --array=1-5
-
+#--gres=gpu:1
 
 echo starting_jobscript
 module add CUDA/10.1.243-GCC-8.3.0
@@ -22,7 +20,7 @@ nvidia-smi
 
 echo running job 1
 
-# This flow runs the flat classifier (for models)
-python /home/p288722/git_code/scd_images/run_flow.py -fold ${SLURM_ARRAY_TASK_ID} -num_patches 200 -patch_aggregation "majority_vote" -use_contributing_patches 0 -patches_type "homo"
+# This flow runs the flat classifier (for devices)
+python /home/p288722/git_code/scd_images/run_flow_4.py -fold 1 -num_patches 200 -patch_aggregation "majority_vote" -use_contributing_patches 0 -patches_type "homo"
 
 echo jobs completed

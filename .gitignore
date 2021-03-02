@@ -8,3 +8,4 @@
 /miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/signature_net.pt
 /miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/similarity_net.pt
 /.pytest_cache
+.idea

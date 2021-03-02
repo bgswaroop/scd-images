@@ -12,9 +12,9 @@ from utils.cost_functions import CategoricalCrossEntropyLoss
 class Configure(object):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_data = Path(rf'/data/p288722/dresden/train/18_models_128x128_5/fold_1.json')
-    test_data = Path(rf'/data/p288722/dresden/test/18_models_128x128_5/fold_1.json')
-    tar_file = rf'/data/p288722/dresden/source_devices/nat_patches_128x128_5.tar'
+    train_data_config = Path(rf'/data/p288722/dresden/train/18_models_128x128_5/fold_1.json')
+    test_data_config = Path(rf'/data/p288722/dresden/test/18_models_128x128_5/fold_1.json')
+    dataset_folder = rf'/data/p288722/dresden/source_devices/nat_patches_128x128_5'
 
     # data = r'D:\Data\INCIBE_dataset\source_devices'
 
@@ -38,6 +38,11 @@ class Configure(object):
         cls.runtime_dir.mkdir(exist_ok=True, parents=True)
         cls.signet_dir.mkdir(exist_ok=True, parents=True)
         cls.simnet_dir.mkdir(exist_ok=True, parents=True)
+        cls.runtime_dir.joinpath('signature_net_brands').mkdir(exist_ok=True, parents=True)
+        cls.runtime_dir.joinpath('signature_net_Nikon').mkdir(exist_ok=True, parents=True)
+        cls.runtime_dir.joinpath('signature_net_Samsung').mkdir(exist_ok=True, parents=True)
+        cls.runtime_dir.joinpath('signature_net_Sony').mkdir(exist_ok=True, parents=True)
+
         SigNet.name = cls.sig_net_name
         SimNet.name = cls.sim_net_name
 
@@ -51,7 +56,7 @@ class SigNet(object):
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, last_epoch=-1)
     # epochs = 9
 
-    with open(Configure.train_data, 'r') as f:
+    with open(Configure.train_data_config, 'r') as f:
         num_classes = len(json.load(f)['file_paths'])
 
     is_constrained = False
@@ -60,8 +65,12 @@ class SigNet(object):
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.90, last_epoch=-1)
 
     criterion = CategoricalCrossEntropyLoss()
+    max_epochs = 100
 
-    epochs = 3
+    # Choices: 'majority_vote', 'prediction_score_sum', 'log_scaled_prediction_score_sum', 'log_scaled_std_dev'
+    patch_aggregation = 'log_scaled_std_dev'
+    use_contributing_patches = False
+    samples_per_class = 20_000
 
     @classmethod
     def update_model(cls, num_classes, is_constrained=False):

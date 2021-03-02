@@ -97,10 +97,10 @@ def extract_patches_from_dir(device, num_patches_to_extract, patch_dimensions, d
     map_size *= num_patches_to_extract
 
     # Parameters for gamma correction
-    # gamma = 2.2
-    # inverse_gamma = 1.0 / gamma
-    # encoding_table = np.array([((i / 255.0) ** inverse_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
-    # decoding_table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    gamma = 2.2
+    inverse_gamma = 1.0 / gamma
+    encoding_table = np.array([((i / 255.0) ** inverse_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    decoding_table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
 
     lmdb_filename = str(Path(dest_dir).joinpath(f'{device.name}'))
 
@@ -112,7 +112,7 @@ def extract_patches_from_dir(device, num_patches_to_extract, patch_dimensions, d
                 img = cv2.imread(str(image_path))
 
                 # # Gamma Encode 2.2
-                # img = cv2.LUT(img, encoding_table)
+                img = cv2.LUT(img, decoding_table)
 
                 # # Hist equalization
                 # img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -164,7 +164,9 @@ def extract_patches_from_hierarchical_dir(source_images_dir, dest_dataset_folder
         params = iterable[device_id]
         device_name = params[0].name
         device_dir = Path(dest_dataset_folder).joinpath(f'{device_name}')
-        device_dir.mkdir(parents=True, exist_ok=True)
+        if device_dir.exists():
+            shutil.rmtree(device_dir)
+        device_dir.mkdir(parents=True)
         print(str(device_dir))
         extract_patches_from_dir(*params)
     else:
@@ -184,6 +186,7 @@ def extract_patches_from_hierarchical_dir(source_images_dir, dest_dataset_folder
                 #             img = np.frombuffer(patch[0], dtype=np.uint8).reshape((128, 128, 3))
                 #             std = np.frombuffer(patch[1], dtype=np.float).reshape((1, 3))
                 #             print(type(img), type(std))
+
 
 def filter_patches(source_patches_view, dest_patches_view, num_patches_to_filter):
     """
@@ -679,26 +682,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-task_num', type=int, help='enter the task number')
     args = parser.parse_args()
-    print(f'running the task - {args.task_num}')
 
     patch_size = 128
     num_patches = 20
     suffix = f'{patch_size}x{patch_size}_{num_patches}'
-    pre_suffix = f'tr_none'  # 'tr_hist_eq', 'tr_gamma_enc_2.2', 'tr_gamma_dec_2.2'
+
+    print(f'running the task - {args.task_num}')
 
     extract_patches_from_hierarchical_dir(
         source_images_dir=Path(rf'/data/p288722/dresden/source_devices/natural/'),
-        dest_dataset_folder=Path(rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_{pre_suffix}_{suffix}/'),
+        dest_dataset_folder=Path(rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_tr_gamma_dec_2.2_{suffix}/'),
         num_patches_to_extract=num_patches,
         patch_dimensions=(patch_size, patch_size),
         device_id=args.task_num
     )
 
     # prepare_dresden_18_models_dataset(
-    #     source_dataset_folder=Path(
-    #         rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_{pre_suffix}_{suffix}/'),
-    #     dest_train_dir=Path(rf'/data/p288722/dresden/train/18_models_{pre_suffix}_{suffix}'),
-    #     dest_test_dir=Path(rf'/data/p288722/dresden/test/18_models_{pre_suffix}_{suffix}')
+    #     source_dataset_folder=Path(rf'/scratch/p288722/datasets/dresden/source_devices/nat_patches_{suffix}/'),
+    #     dest_train_dir=Path(rf'/data/p288722/dresden/train/18_models_from200_{suffix}'),
+    #     dest_test_dir=Path(rf'/data/p288722/dresden/test/18_models_from200_{suffix}')
     # )
 
     # prepare_dresden_66_devices_dataset(

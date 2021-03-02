@@ -23,7 +23,7 @@ def run_train(fold_id):
         with open(filename, 'rb') as f:
             prnu_signature = pickle.load(f)
     else:
-        with open(Configure.train_data, 'r') as f:
+        with open(Configure.train_data_config, 'r') as f:
             train_images_paths = json.load(f)['file_paths']
 
         prnu_signature = {}
@@ -45,7 +45,7 @@ def run_train(fold_id):
 
 @log_running_time
 def run_classify(prnu_signature, fold_id):
-    with open(Configure.test_data, 'r') as f:
+    with open(Configure.test_data_config, 'r') as f:
         test_images_paths = json.load(f)['file_paths']
         devices_list = {x: idx for idx, x in enumerate(sorted(test_images_paths.keys()))}
 
@@ -118,8 +118,8 @@ def run_flow(fold_id):
     :return: None
     """
 
-    Configure.train_data = rf'/data/p288722/dresden/train/nat_images_18/fold_{fold_id}.json'
-    Configure.test_data = rf'/data/p288722/dresden/test/nat_images_18/fold_{fold_id}.json'
+    Configure.train_data_config = rf'/data/p288722/dresden/train/nat_images_18/fold_{fold_id}.json'
+    Configure.test_data_config = rf'/data/p288722/dresden/test/nat_images_18/fold_{fold_id}.json'
     Configure.fold_dir = Configure.runtime_dir.joinpath(f'fold_{fold_id}')
     Configure.fold_dir.mkdir(exist_ok=True, parents=True)
 

@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageFile
 
+from configure import Configure
 from miscellaneous.scd_delivery.main.scd_modules.signature_net import SignatureNet1
 from miscellaneous.scd_delivery.main.scd_modules.similarity_net import SimilarityNet
 
@@ -81,7 +82,7 @@ class ServicesSCD:
         WARNING: Repeated usage may lead to memory exceptions
         """
         self.sig_net = SignatureNet1(num_classes=58)
-        self.sig_net.load_state_dict(torch.load(self.sig_net_trained_model))
+        self.sig_net.load_state_dict(torch.load(self.sig_net_trained_model, map_location=Configure.device))
         self.sig_net = self.sig_net.to(self.device)
         self.sig_net.eval()
 
@@ -187,7 +188,7 @@ class ServicesSCD:
         WARNING: Repeated usage may lead to memory exceptions
         """
         self.sim_net = SimilarityNet()
-        self.sim_net.load_state_dict(torch.load(self.sim_net_trained_model))
+        self.sim_net.load_state_dict(torch.load(self.sim_net_trained_model, map_location=Configure.device))
         self.sim_net = self.sim_net.to(self.device)
         self.sim_net.eval()
 

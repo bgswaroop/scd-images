@@ -15,9 +15,9 @@ class Utils(object):
         # load the model
         runtime_dir = Configure.runtime_dir
         with open(runtime_dir.joinpath('{}.pt'.format(SigNet.name)), 'rb') as f:
-            SigNet.model = torch.load(f)  # fixme: the model
+            SigNet.model = torch.load(f, map_location=Configure.device)  # fixme: the model to read from state_dict
 
-        train_loader = Data.load_data_for_visualization(dataset=Configure.train_data, config_mode='train')
+        train_loader = Data.load_data_for_visualization(dataset=Configure.train_data_config, config_mode='train')
 
         # extract the input output pairs
         SigNet.model.eval()
@@ -76,7 +76,7 @@ class Utils(object):
         save_to_dir.mkdir(parents=True, exist_ok=True)
 
         if not class_wise_labels:
-            class_wise_labels = Data.compute_avg_fft_labels(dataset=Configure.train_data)
+            class_wise_labels = Data.compute_avg_fft_labels(dataset=Configure.train_data_config)
 
         for idx, label in enumerate(class_wise_labels):
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 6))

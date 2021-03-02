@@ -4,6 +4,7 @@ from pathlib import Path
 import torch
 
 import logging
+from configure import Configure
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class Utils:
                 pre_trained_model_path = model_path
 
         if pre_trained_model_path:
-            params = torch.load(pre_trained_model_path)
+            params = torch.load(pre_trained_model_path, map_location=Configure.device)
             filename = Path(pre_trained_models_dir).joinpath('history.pkl')
             if filename.exists():
                 with open(str(filename), 'rb') as f:
@@ -176,6 +177,28 @@ class Utils:
                 symlink = test_dir.joinpath(img_path.name)
                 if not symlink.exists():
                     os.symlink(src=img_path, dst=symlink)  # Need to run this in administrator/sudo mode
+
+    @staticmethod
+    def early_stopping(patience: int, metric, delta=0):
+        """
+        Implement early stopping
+        :param patience:
+        :param metric:
+        :param delta:
+        :return: return value of False indicate to continue training, and True otherwise.
+        """
+        num_steps = len(metric)
+        if patience >= num_steps:
+            return False, 'too few epochs'
+
+        # Observe the U curve based on patience
+        patience_epochs = metric[-(patience+1):]
+        if sorted(patience_epochs) == patience_epochs:
+            return True, 'begins to diverge'
+        if max(patience_epochs) - min(patience_epochs) <= delta:
+            return True, 'has converged'
+
+        return False, 'stopping criteria is not met'
 
 
 if __name__ == '__main__':

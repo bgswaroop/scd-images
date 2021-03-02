@@ -126,12 +126,12 @@ class VisualizationUtils:
         VisualizationUtils.plot_learning_rate(save_to_dir=save_to_dir, history=history)
 
     @classmethod
-    def plot_confusion_matrix(cls, ground_truth_labels, predictions, one_hot, save_to_dir):
+    def plot_confusion_matrix(cls, ground_truths, predictions, one_hot, save_to_dir):
         if one_hot:
-            ground_truth_labels = [np.argmax(x) for x in ground_truth_labels]
+            ground_truths = [np.argmax(x) for x in ground_truths]
             predictions = [np.argmax(x) for x in predictions]
 
-        cm_matrix = sklearn.metrics.confusion_matrix(ground_truth_labels, predictions)
+        cm_matrix = sklearn.metrics.confusion_matrix(ground_truths, predictions)
 
         # Creating labels for the plot
         x_ticks = [''] * len(cm_matrix)
@@ -139,7 +139,7 @@ class VisualizationUtils:
         for i in np.arange(0, len(cm_matrix), 2):
             x_ticks[i] = str(i + 1)
             y_ticks[i] = str(i + 1)
-        num_classes = max(max(ground_truth_labels), max(predictions)) + 1
+        num_classes = max(max(ground_truths), max(predictions)) + 1
         df_cm = pd.DataFrame(cm_matrix, range(1, num_classes + 1), range(1, num_classes + 1))
         plt.figure(figsize=(30, 20))
         sn.set(font_scale=2.5)  # for label size

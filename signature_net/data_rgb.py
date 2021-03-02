@@ -1,14 +1,16 @@
 import json
 import logging
+import pickle
 import random
-import tarfile
+import warnings
 from pathlib import Path
 
+import lmdb
 import numpy as np
 import torch
 import torchvision
-from PIL import Image
 
+warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 
@@ -27,16 +29,20 @@ class PerChannelMeanSubtraction:
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    # namedtuple('')
-
-    def __init__(self, image_ids, labels, tar_file=None, transform=None):
+    def __init__(self, image_ids, labels, dataset=None, transform=None):
         """Initialization"""
         self.labels = labels
         self.image_ids = image_ids
         self.transform = transform
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.tar = tarfile.open(tar_file, 'r:') if tar_file else None
-        logger.info(f'No. members in tar: {len(self.tar.getmembers())}')
+        if dataset:
+            self.camera_devices = {}
+            camera_devices = Path(dataset).glob('*')
+            for device_dir in camera_devices:
+                self.camera_devices[device_dir.name] = {'env': lmdb.open(str(device_dir), readonly=True)}
+                self.camera_devices[device_dir.name]['txn'] = self.camera_devices[device_dir.name]['env'].begin()
+        else:
+            self.camera_devices = None
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -45,25 +51,28 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         """Generates one sample of data"""
         # Select sample
-        image_id = self.image_ids[index]
+        image_id = str(self.image_ids[index])
 
         # Load data and get label
-        try:
-            X = Image.open(self.tar.extractfile(image_id)) if self.tar else Image.open(image_id)
-        except Exception as e:
-            logger.info(e)
-            raise e
+        device_name = '_'.join(str(image_id).split('_')[:-2])
+        txn = self.camera_devices[device_name]['txn']
+        patch = pickle.loads(txn.get(image_id.encode('ascii')))
+        img = np.frombuffer(patch[0], dtype=np.uint8).reshape((128, 128, 3))
+        img = np.ndarray.copy(np.array(img, dtype=np.float32)) / 255.0
+        std = np.frombuffer(patch[1], dtype=np.float32).reshape((1, 3))
 
-        y = self.labels[image_id]
+        # tuple: label, image_id, std
+        y = self.labels[image_id], image_id, std
 
         if self.transform:
-            X = self.transform(X)
+            img = self.transform(img)
 
-        return X, y
+        return img, y
 
     def __del__(self):
-        if self.tar:
-            self.tar.close()
+        if self.camera_devices:
+            for device in self.camera_devices:
+                self.camera_devices[device]['env'].close()
 
 
 class Data(object):
@@ -72,24 +81,24 @@ class Data(object):
          PerChannelMeanSubtraction()])
 
     @classmethod
-    def prepare_torch_dataset(cls, dataset_file, balance_classes, tar_file=None):
+    def prepare_torch_dataset(cls, config_file, balance_classes, dataset=None):
         """
-        :param tar_file:
-        :param dataset_file: dataset directory or a list containing image paths
+        :param dataset: data set directory
+        :param config_file: dataset directory or a list containing image paths
         :param balance_classes: a boolean value
         :return: a torch dataset
         """
         labels = None
-        if isinstance(dataset_file, list):
+        if isinstance(config_file, list):
             if balance_classes:
                 raise NotImplementedError
-            image_paths = dataset_file
-        elif Path(dataset_file).is_dir():
-            image_paths = list(Path(dataset_file).glob('*/*'))
+            image_paths = config_file
+        elif Path(config_file).is_dir():
+            image_paths = list(Path(config_file).glob('*/*'))
             if balance_classes:
                 raise NotImplementedError
-        elif Path(dataset_file).suffix == '.json':
-            with open(dataset_file, 'r') as f:
+        elif Path(config_file).suffix == '.json':
+            with open(config_file, 'r') as f:
                 image_paths_dict = json.load(f)
             image_paths, labels = [], []
 
@@ -113,22 +122,22 @@ class Data(object):
                 labels += [device_name] * len(paths)
 
         logger.info(f'Total number of images: {len(image_paths)}')
-        class_labels = cls.compute_one_hot_labels(dataset=image_paths, labels=labels)
-        img_labels = {x: (y, str(x)) for x, y in zip(image_paths, class_labels)}
-        dataset = Dataset(image_ids=image_paths, labels=img_labels, tar_file=tar_file,
+        img_labels = cls.compute_one_hot_labels(dataset=image_paths, labels=labels)
+        labels_dict = {x: y for x, y in zip(image_paths, img_labels)}
+        dataset = Dataset(image_ids=image_paths, labels=labels_dict, dataset=dataset,
                           transform=cls.rgb_image_transform)
 
         return dataset
 
     @classmethod
-    def load_data(cls, dataset, config_mode, tar_file=None):
+    def load_data(cls, config_file, config_mode, dataset=None):
         # Prepare for processing
         if config_mode == 'train':
-            dataset = cls.prepare_torch_dataset(dataset_file=dataset, balance_classes=False, tar_file=tar_file)
-            return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=True, num_workers=12)
+            torch_dataset = cls.prepare_torch_dataset(config_file=config_file, balance_classes=False, dataset=dataset)
+            return torch.utils.data.DataLoader(torch_dataset, batch_size=512, shuffle=True, num_workers=12)
         elif config_mode == 'test':
-            dataset = cls.prepare_torch_dataset(dataset_file=dataset, balance_classes=False, tar_file=tar_file)
-            return torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=12)
+            torch_dataset = cls.prepare_torch_dataset(config_file=config_file, balance_classes=False, dataset=dataset)
+            return torch.utils.data.DataLoader(torch_dataset, batch_size=512, shuffle=False, num_workers=12)
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):

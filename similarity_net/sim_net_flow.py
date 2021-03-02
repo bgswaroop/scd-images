@@ -113,15 +113,15 @@ class SimNetFlow(object):
         """
         if not pre_trained_model_path:
             pre_trained_model_path = Configure.runtime_dir.joinpath('{}.pt'.format(SimNet.name))
-        params = torch.load(pre_trained_model_path)
+        params = torch.load(pre_trained_model_path, map_location=Configure.device)
         SimNet.model.load_state_dict(params['model_state_dict'])
 
         if config_mode == 'train':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data_config).glob('*'))]
         elif config_mode == 'test':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data_config).glob('*'))]
         else:
             raise ValueError('Invalid config_mode')
 
@@ -202,10 +202,10 @@ class SimNetFlow(object):
         """
         if config_mode == 'train':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data_config).glob('*'))]
         elif config_mode == 'test':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data_config).glob('*'))]
         else:
             raise ValueError('Invalid config_mode')
 
@@ -257,10 +257,10 @@ class SimNetFlow(object):
         raise NotImplementedError('In development, check future commits for completed code')
         if config_mode == 'train':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.train_data_config).glob('*'))]
         elif config_mode == 'test':
             data_loader = Data.load_data(config_mode=config_mode)
-            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data).glob('*'))]
+            devices_list = [Path(x).name for x in sorted(Path(Configure.test_data_config).glob('*'))]
         else:
             raise ValueError('Invalid config_mode')
 
