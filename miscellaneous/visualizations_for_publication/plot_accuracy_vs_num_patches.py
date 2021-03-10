@@ -1,5 +1,7 @@
+import json
 from collections import namedtuple
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -166,27 +168,12 @@ def plot_f1_vs_num_patches(results_dict):
 
 
 if __name__ == '__main__':
-    # # Homogeneous patches
-    # base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_09/')
-    # filename = 'scd_majority_vote_use_contributing_patches_False.log'
-    #
-    # results = {}
-    # for num_patches in [1, 5, 10, 20, 40, 100, 200, 400]:
-    #     if num_patches not in results:
-    #         results[f'num_patches_{num_patches}'] = {}
-    #     for fold_id in [1, 2, 3, 4, 5]:
-    #         result_directory = base_directory.joinpath(rf'test_{num_patches}/fold_{fold_id}/')
-    #         results[f'num_patches_{num_patches}'][f'fold_{fold_id}'] = \
-    #             extract_scores_from_log_file(filepath=result_directory.joinpath(filename))
-    #
-    # plot_accuracy_vs_num_patches(results, title='Image-level predictions on Homogeneous Patches')
-
-    # Random patches
-    base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_random_2/')
+    # Homogeneous patches
+    base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_09/')
     filename = 'scd_majority_vote_use_contributing_patches_False.log'
 
     results = {}
-    for num_patches in [1, 5, 10, 20, 40, 100, 400, 200]:
+    for num_patches in [200]:  # [1, 5, 10, 20, 40, 100, 200, 400]:
         if num_patches not in results:
             results[f'num_patches_{num_patches}'] = {}
         for fold_id in [1, 2, 3, 4, 5]:
@@ -194,17 +181,60 @@ if __name__ == '__main__':
             results[f'num_patches_{num_patches}'][f'fold_{fold_id}'] = \
                 extract_scores_from_log_file(filepath=result_directory.joinpath(filename))
 
-    plot_accuracy_vs_num_patches(results, title='Image-level predictions on Random Patches')
+    with open(rf'/scratch/p288722/runtime_data/scd_pytorch/dev/200_patches_homo_results.json', 'w+') as f:
+        json_dict = {'patch_level': {'brands': [], 'nikon': [], 'samsung': [], 'sony': []},
+                     'image_level': {'brands': [], 'nikon': [], 'samsung': [], 'sony': [], 'hierarchical': []},
+                     'f1_scores': {'brands': [], 'nikon': [], 'samsung': [], 'sony': [], 'hierarchical': []}}
+        for fold in results[f'num_patches_200']:
+            json_dict['patch_level']['brands'] += [results['num_patches_200'][fold].brands.patch_acc]
+            json_dict['image_level']['brands'] += [results['num_patches_200'][fold].brands.img_acc]
+            json_dict['f1_scores']['brands'] += [results['num_patches_200'][fold].brands.img_f1]
 
-    # Flat Classifier
-    base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_random_2/')
-    filename = 'scd_majority_vote_use_contributing_patches_False.log'
+            json_dict['patch_level']['nikon'] += [results['num_patches_200'][fold].nikon.patch_acc]
+            json_dict['image_level']['nikon'] += [results['num_patches_200'][fold].nikon.img_acc]
+            json_dict['f1_scores']['nikon'] += [results['num_patches_200'][fold].nikon.img_f1]
 
-    results = {}
-    for num_patches in [1, 5, 10, 20, 40, 100, 400, 200]:
-        if num_patches not in results:
-            results[f'num_patches_{num_patches}'] = {}
-        for fold_id in [1]:
-            result_directory = base_directory.joinpath(rf'test_{num_patches}/fold_{fold_id}/')
-            results[f'num_patches_{num_patches}'][f'fold_{fold_id}'] = \
-                extract_scores_from_log_file(filepath=result_directory.joinpath(filename))
+            json_dict['patch_level']['samsung'] += [results['num_patches_200'][fold].samsung.patch_acc]
+            json_dict['image_level']['samsung'] += [results['num_patches_200'][fold].samsung.img_acc]
+            json_dict['f1_scores']['samsung'] += [results['num_patches_200'][fold].samsung.img_f1]
+
+            json_dict['patch_level']['sony'] += [results['num_patches_200'][fold].sony.patch_acc]
+            json_dict['image_level']['sony'] += [results['num_patches_200'][fold].sony.img_acc]
+            json_dict['f1_scores']['sony'] += [results['num_patches_200'][fold].sony.img_f1]
+
+            json_dict['image_level']['hierarchical'] += [results['num_patches_200'][fold].hierarchical.img_acc]
+            json_dict['f1_scores']['hierarchical'] += [results['num_patches_200'][fold].hierarchical.img_f1]
+
+        json.dump(json_dict, f, indent=4)
+
+    pass
+
+    # plot_accuracy_vs_num_patches(results, title='Image-level predictions on Homogeneous Patches')
+
+    # # Random patches
+    # base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_random_2/')
+    # filename = 'scd_majority_vote_use_contributing_patches_False.log'
+    #
+    # results = {}
+    # for num_patches in [1, 5, 10, 20, 40, 100, 400, 200]:
+    #     if num_patches not in results:
+    #         results[f'num_patches_{num_patches}'] = {}
+    #     for fold_id in [1, 2, 3, 4, 5]:
+    #         result_directory = base_directory.joinpath(rf'test_{num_patches}/fold_{fold_id}/')
+    #         results[f'num_patches_{num_patches}'][f'fold_{fold_id}'] = \
+    #             extract_scores_from_log_file(filepath=result_directory.joinpath(filename))
+    #
+    # plot_accuracy_vs_num_patches(results, title='Image-level predictions on Random Patches')
+
+    # # Flat Classifier
+    # base_directory = Path(r'/scratch/p288722/runtime_data/scd_pytorch/18_models_hcal_random_2/')
+    # filename = 'scd_majority_vote_use_contributing_patches_False.log'
+    #
+    # results = {}
+    # for num_patches in [1, 5, 10, 20, 40, 100, 400, 200]:
+    #     if num_patches not in results:
+    #         results[f'num_patches_{num_patches}'] = {}
+    #     for fold_id in [1]:
+    #         result_directory = base_directory.joinpath(rf'test_{num_patches}/fold_{fold_id}/')
+    #         results[f'num_patches_{num_patches}'][f'fold_{fold_id}'] = \
+    #             extract_scores_from_log_file(filepath=result_directory.joinpath(filename))

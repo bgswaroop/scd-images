@@ -37,7 +37,25 @@ def plot_confusion_matrix(cm_matrix, num_classes, title, y_ticks, save_to_dir=No
 
 
 if __name__ == '__main__':
-    # 18_models_hierarchical_8\fold_1\scd_majority_vote_use_contributing_patches_False.log
+    # # 18_models_hierarchical_8\fold_1\scd_majority_vote_use_contributing_patches_False.log
+    # cm_nikon = np.array(
+    #     [[166, 0, 0],
+    #      [2, 333, 0],
+    #      [0, 0, 163]]
+    # )
+    #
+    # cm_samsung = np.array(
+    #     [[216, 0],
+    #      [0, 198]]
+    # )
+    #
+    # cm_sony = np.array(
+    #     [[284, 0, 0],
+    #      [0, 184, 0],
+    #      [20, 0, 180]]
+    # )
+
+    # 18_models_hcal_09\test_200\fold_1\scd_majority_vote_use_contributing_patches_False.log
     cm_nikon = np.array(
         [[166, 0, 0],
          [2, 333, 0],
