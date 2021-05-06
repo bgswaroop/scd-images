@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 
-from signature_net.models import SignatureNet1
+from sig_net.classifier_baseline.models import SignatureNet1
 
 
 def determine_params(pretrained_model):

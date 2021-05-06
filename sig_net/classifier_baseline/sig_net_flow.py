@@ -9,10 +9,10 @@ import numpy as np
 import torch
 
 from configure import Configure, SigNet
-from signature_net.data_rgb import Data
+from sig_net.classifier_baseline.data_rgb import Data
 from utils.evaluation_metrics import MultinomialClassificationScores
 from utils.logging import log_running_time
-from utils.training_utils import Utils
+from sig_net.auto_encoder.utils import Utils
 from utils.visualization_utils import VisualizationUtils
 
 logger = logging.getLogger(__name__)
@@ -443,7 +443,7 @@ class SigNetFlow(object):
 
 
 if __name__ == '__main__':
-    from utils.torchsummary import summary
+    from sig_net.auto_encoder.utils import summary
 
     summary(SigNet.model, (3, 320, 480), logger.info)
     # SigNetFlow.extract_signatures(config_mode='train')

@@ -92,7 +92,7 @@ class Data(object):
     @log_running_time
     def load_data(cls, config_mode):
 
-        from signature_net.sig_net_flow import SigNetFlow
+        from sig_net.classifier_baseline.sig_net_flow import SigNetFlow
         signatures = SigNetFlow.extract_signatures(config_mode=config_mode)
         dataset = cls.make_pairs(signatures)
 

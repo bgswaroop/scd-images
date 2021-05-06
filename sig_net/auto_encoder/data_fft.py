@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import torch
@@ -67,24 +68,54 @@ class Dataset(torch.utils.data.Dataset):
         self.labels = labels
         self.list_ids = list_ids
         self.transform = transform
+        self.eps = 1e-10
+        self.crop_dimensions = (480, 639)
 
     def __len__(self):
         """Denotes the total number of samples"""
         return len(self.list_ids)
 
+    @staticmethod
+    def roll_n(X, axis, n):
+        f_idx = tuple(slice(None, None, None) if i != axis else slice(0, n, None)
+                      for i in range(X.dim()))
+        b_idx = tuple(slice(None, None, None) if i != axis else slice(n, None, None)
+                      for i in range(X.dim()))
+        front = X[f_idx]
+        back = X[b_idx]
+        return torch.cat([back, front], axis)
+
+    @staticmethod
+    def fftshift(real, imag, dims=None):
+        if dims is None:
+            dims = range(1, len(real.size()))
+        for dim in dims:
+            real = Dataset.roll_n(real, axis=dim, n=real.size(dim) // 2)
+            imag = Dataset.roll_n(imag, axis=dim, n=imag.size(dim) // 2)
+        return real, imag
+
     def __getitem__(self, index):
         """Generates one sample of data"""
         # Select sample
-        ID = self.list_ids[index]
+        idx = self.list_ids[index]
 
-        # Load data and get label
-        X = Image.open(ID)
-        y = self.labels[ID]
+        # Load and pre-process the data
+        x = Image.open(idx)  # pillow reads the image with the  sequence of RGB (unlike openCV)
+        x = torchvision.transforms.CenterCrop(self.crop_dimensions)(x)
+        x = torchvision.transforms.ToTensor()(x)
+        x = torch.mean(x, dim=0, keepdim=True)  # converting image to grayscale
+        x = torch.fft.rfft2(x)
+        real, imag = self.fftshift(real=x.real, imag=x.imag, dims=[1])
 
-        if self.transform:
-            X = self.transform(X)
+        x = torch.sqrt(torch.square(real) + torch.square(imag))  # magnitude of complex number
+        x = torch.log(x + self.eps)  # scale the values, adding eps for numerical stability
+        mag = (x - torch.min(x)) / (torch.max(x) - torch.min(x))  # normalize the values
+        # phase = torch.atan(imag / real)
 
-        return X, y
+        # Image label
+        y = self.labels[index]
+
+        return mag[0], y
 
 
 class Data(object):
@@ -94,30 +125,45 @@ class Data(object):
          MyFFTTransform(direction='forward')])
 
     @classmethod
-    def prepare_torch_dataset(cls, image_paths):
+    def prepare_torch_dataset(cls, dataset_view, dataset_dir):
         """
-        :param image_paths: dataset directory or a list containing image paths
+        :param dataset_dir: the root directory of the dataset
+        :param dataset_view: a dataset view in a json file
         :return: a torch dataset
         """
-        if Path(image_paths).is_dir():
-            image_paths = list(Path(image_paths).glob('*/*.jpg'))
+        # class_labels = cls.compute_avg_fft_labels(dataset=dataset_view)
+        # img_labels = {}
+        # for img_path in config_file:
+        #     img_labels[img_path] = (class_labels[img_path.parent.name], str(img_path))
 
-        class_labels = cls.compute_avg_fft_labels(dataset=image_paths)
-        img_labels = {}
-        for img_path in image_paths:
-            img_labels[img_path] = (class_labels[img_path.parent.name], str(img_path))
-        dataset = Dataset(list_ids=image_paths, labels=img_labels, transform=cls.spectrum_image_transform)
+        with open(dataset_view, 'r') as f:
+            source_images = json.load(f)['file_paths']
+
+        image_ids = []
+        image_labels = []
+        numeric_label = {x: index for index, x in enumerate(sorted(list(source_images.keys())))}
+
+        for label in source_images:
+            for image_name in source_images[label]:
+                device_name = '_'.join(image_name.split('_')[:-1])
+                image_path = dataset_dir.joinpath(f'{device_name}/{image_name}')
+                image_ids.append(image_path)
+                image_labels.append((numeric_label[label], str(image_path)))
+
+        dataset = Dataset(list_ids=image_ids, labels=image_labels, transform=cls.spectrum_image_transform)
 
         return dataset
 
     @classmethod
-    def load_data(cls, dataset, config_mode):
-        dataset = cls.prepare_torch_dataset(dataset)
+    def load_data(cls, config_file, config_mode, dataset_dir=None):
+        torch_dataset = cls.prepare_torch_dataset(config_file, dataset_dir)
         # Prepare for processing
         if config_mode == 'train':
-            return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
+            return torch.utils.data.DataLoader(torch_dataset, batch_size=4, shuffle=True,
+                                               num_workers=8, prefetch_factor=2)
         elif config_mode == 'test':
-            return torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+            return torch.utils.data.DataLoader(torch_dataset, batch_size=4, shuffle=False,
+                                               num_workers=8, prefetch_factor=2)
 
     @classmethod
     def load_data_for_visualization(cls, dataset, config_mode):

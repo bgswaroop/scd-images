@@ -9,7 +9,7 @@ from configure import Configure
 logger = logging.getLogger(__name__)
 
 
-class Utils:
+class TrainingUtils:
     def __init__(self):
         pass
 
@@ -73,7 +73,7 @@ class Utils:
     def save_best_model(pre_trained_models_dir, destination_dir, history, name):
         import shutil
 
-        best_epoch = Utils.choose_best_epoch_from_history(history) + 1
+        best_epoch = TrainingUtils.choose_best_epoch_from_history(history) + 1
         pre_trained_model_path = None
         for model_path in Path(pre_trained_models_dir).glob('epoch*.pt'):
             model_path = str(model_path)
@@ -202,7 +202,7 @@ class Utils:
 
 
 if __name__ == '__main__':
-    Utils.split_train_test(test_set_size=0.2,
-                           source_images_dir=Path(r'D:\Data\Dresden\source_devices\jpeg'),
-                           train_images_dir=Path(r'D:\Data\Dresden\train\jpeg'),
-                           test_images_dir=Path(r'D:\Data\Dresden\test\jpeg'))
+    TrainingUtils.split_train_test(test_set_size=0.2,
+                                   source_images_dir=Path(r'D:\Data\Dresden\source_devices\jpeg'),
+                                   train_images_dir=Path(r'D:\Data\Dresden\train\jpeg'),
+                                   test_images_dir=Path(r'D:\Data\Dresden\test\jpeg'))

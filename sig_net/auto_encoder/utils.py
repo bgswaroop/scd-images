@@ -4,7 +4,7 @@ import torch
 from matplotlib import pyplot as plt
 
 from configure import Configure, SigNet
-from signature_net.data_fft import Data
+from sig_net.auto_encoder.data_fft import Data
 from utils.visualization_utils import AE_Sample
 
 

@@ -5,7 +5,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 
-from utils.training_utils import Utils
+from utils.training_utils import TrainingUtils
 
 
 def plot_learning_curves(history_dir_brands, history_dir_nikon, history_dir_samsung, history_dir_sony):
@@ -45,7 +45,7 @@ def plot_learning_curves(history_dir_brands, history_dir_nikon, history_dir_sams
     # plot Nikon
     loss = history_nikon['loss'][start_epoch:]
     val_loss = history_nikon['val_loss'][start_epoch:]
-    selected_epoch = Utils.choose_best_epoch_from_history(history_nikon) + 1
+    selected_epoch = TrainingUtils.choose_best_epoch_from_history(history_nikon) + 1
     epochs = history_nikon['epochs'][start_epoch:]
 
     a1, = ax_nikon.plot(epochs, loss, c='#FD681C', label='Train Nikon')
@@ -55,7 +55,7 @@ def plot_learning_curves(history_dir_brands, history_dir_nikon, history_dir_sams
     # plot Samsung
     loss = history_samsung['loss'][start_epoch:]
     val_loss = history_samsung['val_loss'][start_epoch:]
-    selected_epoch = Utils.choose_best_epoch_from_history(history_samsung) + 1
+    selected_epoch = TrainingUtils.choose_best_epoch_from_history(history_samsung) + 1
     epochs = history_samsung['epochs'][start_epoch:]
 
     a4, = ax_samsung.plot(epochs, loss, c='#4C3FD4', label='Train Samsung')
@@ -66,7 +66,7 @@ def plot_learning_curves(history_dir_brands, history_dir_nikon, history_dir_sams
     # plot Sony
     loss = history_sony['loss'][start_epoch:]
     val_loss = history_sony['val_loss'][start_epoch:]
-    selected_epoch = Utils.choose_best_epoch_from_history(history_sony) + 1
+    selected_epoch = TrainingUtils.choose_best_epoch_from_history(history_sony) + 1
     epochs = history_sony['epochs'][start_epoch:]
 
     a7, = ax_sony.plot(epochs, loss, c='#025E00', label='Train Sony')
@@ -96,7 +96,7 @@ def plot_learning_curves(history_dir_brands, history_dir_nikon, history_dir_sams
     # plot brands
     loss = history_brands['loss'][start_epoch:]
     val_loss = history_brands['val_loss'][start_epoch:]
-    selected_epoch = Utils.choose_best_epoch_from_history(history_brands) + 1
+    selected_epoch = TrainingUtils.choose_best_epoch_from_history(history_brands) + 1
     epochs = history_brands['epochs'][start_epoch:]
 
     a10, = ax_brands.plot(epochs, loss, c='#FD681C', label='Train Brands')

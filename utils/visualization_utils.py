@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sn
 import sklearn.metrics
 
-from utils.training_utils import Utils
+from utils.training_utils import TrainingUtils
 
 AE_Sample = namedtuple('AE_Sample', ['loss', 'input', 'output', 'label'])
 
@@ -62,7 +62,7 @@ class VisualizationUtils:
         loss = history['loss']
         val_loss = history['val_loss']
         epochs = history['epochs']
-        selected_epoch = Utils.choose_best_epoch_from_history(history) + 1
+        selected_epoch = TrainingUtils.choose_best_epoch_from_history(history) + 1
 
         plt.figure()
         plt.plot(epochs, acc, 'r', label='Train')

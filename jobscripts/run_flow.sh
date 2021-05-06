@@ -1,13 +1,13 @@
 #!/bin/bash
 
-#SBATCH --job-name=flat
+#SBATCH --job-name=ae
 #SBATCH --time=2:00:00
 #SBATCH --mem=32000
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=gpushort
 #SBATCH --gres=gpu:v100:1
 #SBATCH --ntasks=1
-#SBATCH --array=1-5
+# --array=1-5
 
 
 echo starting_jobscript
@@ -23,6 +23,7 @@ nvidia-smi
 echo running job 1
 
 # This flow runs the flat classifier (for models)
-python /home/p288722/git_code/scd_images/run_flow.py -fold ${SLURM_ARRAY_TASK_ID} -num_patches 200 -patch_aggregation "majority_vote" -use_contributing_patches 0 -patches_type "homo"
+#python /home/p288722/git_code/scd_images/run_flow.py -fold ${SLURM_ARRAY_TASK_ID} -num_patches 200 -patch_aggregation "majority_vote" -use_contributing_patches 0 -patches_type "homo"
+python /home/p288722/git_code/scd_images/run_flow_ae.py -fold 1
 
 echo jobs completed

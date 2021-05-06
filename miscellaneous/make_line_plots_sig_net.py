@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from signature_net.sig_net_flow import SigNetFlow
+from sig_net.classifier_baseline.sig_net_flow import SigNetFlow
 
 
 def prepare_signatures_dict(config_mode):

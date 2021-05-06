@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from sklearn import neighbors, preprocessing, model_selection, decomposition
 
-from signature_net.sig_net_flow import SigNetFlow
+from sig_net.classifier_baseline.sig_net_flow import SigNetFlow
 
 logger = logging.getLogger(__name__)
 

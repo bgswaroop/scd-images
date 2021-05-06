@@ -6,7 +6,7 @@ import torch
 
 from configure import SigNet, Configure
 from miscellaneous.prepare_image_and_patch_data import level_from_hierarchical_dataset
-from signature_net.data_rgb import Data
+from sig_net.classifier_baseline.data_rgb import Data
 
 
 def normalize_output(img):

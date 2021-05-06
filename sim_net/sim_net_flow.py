@@ -7,11 +7,11 @@ import numpy as np
 import torch
 
 from configure import Configure, SimNet
-from similarity_net.data import Data
+from sim_net.data import Data
 from utils.evaluation_metrics import ScoreUtils, BinaryClassificationScores
 from utils.logging import log_running_time
 from utils.torchsummary import summary
-from utils.training_utils import Utils
+from utils.training_utils import TrainingUtils
 from utils.visualization_utils import VisualizationUtils
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class SimNetFlow(object):
         test_loader = Data.load_data(config_mode='test')
 
         init_epoch, history, SimNet.model, SimNet.optimizer, SimNet.scheduler = \
-            Utils.prepare_for_training(Configure.simnet_dir, SimNet.model, SimNet.optimizer, SimNet.scheduler)
+            TrainingUtils.prepare_for_training(Configure.simnet_dir, SimNet.model, SimNet.optimizer, SimNet.scheduler)
         for epoch in range(init_epoch, SimNet.epochs + 1):
             # Train
             SimNet.model.train()
@@ -88,19 +88,19 @@ class SimNetFlow(object):
             val_acc = val_acc / len(train_loader)
 
             # Log epoch statistics
-            Utils.update_history(history, epoch, train_loss, val_loss, train_acc, val_acc, lr, Configure.simnet_dir)
+            TrainingUtils.update_history(history, epoch, train_loss, val_loss, train_acc, val_acc, lr, Configure.simnet_dir)
             VisualizationUtils.plot_learning_statistics(history, Configure.simnet_dir)
-            Utils.save_model_on_epoch_end(SimNet.model.state_dict(), SimNet.optimizer.state_dict(),
-                                          SimNet.scheduler.state_dict(), history, Configure.simnet_dir)
+            TrainingUtils.save_model_on_epoch_end(SimNet.model.state_dict(), SimNet.optimizer.state_dict(),
+                                                  SimNet.scheduler.state_dict(), history, Configure.simnet_dir)
 
             logger.info(f"epoch : {epoch}/{SimNet.epochs}, "
                         f"train_loss = {train_loss:.6f}, val_loss = {val_loss:.6f}, "
                         f"train_acc = {train_acc:.3f}, val_acc = {val_acc:.3f}, "
                         f"time = {epoch_end_time - epoch_start_time:.2f} sec")
 
-        Utils.save_best_model(pre_trained_models_dir=Configure.simnet_dir,
-                              destination_dir=Configure.runtime_dir,
-                              history=history, name=SimNet.name)
+        TrainingUtils.save_best_model(pre_trained_models_dir=Configure.simnet_dir,
+                                      destination_dir=Configure.runtime_dir,
+                                      history=history, name=SimNet.name)
 
     @classmethod
     @log_running_time
