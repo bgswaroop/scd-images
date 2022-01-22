@@ -5,7 +5,7 @@
 /__pycache__/
 /slurm-*.out
 /venv1/
-/miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/signature_net.pt
-/miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/similarity_net.pt
+/_old_strcture/miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/signature_net.pt
+/_old_strcture/miscellaneous/scd_delivery/main/scd_modules/pre_trained_models/similarity_net.pt
 /.pytest_cache
 .idea
