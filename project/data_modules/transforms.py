@@ -142,3 +142,14 @@ class HomogeneousTiles(torch.nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + f'(tile_size={self.tile_size}, img_size={self.img_size}, stride={self.stride})'
+
+
+class PerChannelMeanSubtraction:
+    """Per channel mean subtraction"""
+
+    def __init__(self):
+        pass
+
+    def __call__(self, x):
+        x = x - torch.mean(x, dim=[1, 2], keepdim=True)
+        return x

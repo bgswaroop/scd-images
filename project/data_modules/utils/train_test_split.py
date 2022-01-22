@@ -14,7 +14,8 @@ def parse_args(parse_args_manual):
         parser = argparse.ArgumentParser()
         parser.add_argument('--num_folds', type=int, default=5)
         parser.add_argument('--num_train_scenes', type=int, default=60)
-        parser.add_argument('--num_train_images_per_model', type=int, default=20_000)
+        parser.add_argument('--num_train_images_per_brand', type=int, default=20_000)  # for brand-level classification
+        parser.add_argument('--num_train_images_per_model', type=int, default=20_000)  # for model-level classification
         parser.add_argument('--dataset_dir', type=Path,
                             default=r'/data/p288722/datasets/dresden/source_devices/natural')
         parser.add_argument('--max_num_patches_per_image', type=int, default=200)
@@ -23,6 +24,7 @@ def parse_args(parse_args_manual):
         class Arguments:
             num_folds = 5
             num_train_scenes = 60
+            num_train_images_per_brand = 20_000
             num_train_images_per_model = 20_000
             dataset_dir = Path(r'/data/p288722/datasets/dresden/source_devices/natural')
             max_num_patches_per_image = 200
@@ -53,7 +55,7 @@ def parse_device_name(device_name):
     return brand, model, device
 
 
-def create_model_level_splits(args):
+def create_data_splits(args):
     """
     :param args:
     :return: folds_data
@@ -177,12 +179,24 @@ def create_model_level_splits(args):
                     images = [x for x in images if content[x[:-4]].scene_id in test_scenes]
                     folds_data[fold]['test'][brand][model][device] = images
 
+    # For model-level classifiers per brand (remove all other brands)
+    if args.classifier_type in {"Nikon_models", "Samsung_models", "Sony_models"}:
+        retain_brand = args.classifier_type.split('_')[0]
+        for fold in range(0, args.num_folds):
+            for brand in [x for x in folds_data[fold]['train']]:
+                if retain_brand != brand:
+                    folds_data[fold]['train'].pop(brand)
+            for brand in [x for x in folds_data[fold]['test']]:
+                if retain_brand != brand:
+                    folds_data[fold]['test'].pop(brand)
+
     return folds_data
 
 
 def balance_splits(args, unbalanced_splits):
     balanced_folds_data = unbalanced_splits
     max_ppi = args.max_num_patches_per_image
+    classifier_type = args.classifier_type
 
     print('\nBalancing the training split')
     for fold in tqdm(range(args.num_folds)):
@@ -190,8 +204,14 @@ def balance_splits(args, unbalanced_splits):
             hierarchical_data = unbalanced_splits[fold][mode]
 
             for brand, model_data in hierarchical_data.items():
+                if classifier_type == "all_brands":
+                    num_train_imgs_per_model = int(args.num_train_images_per_brand / len(model_data))
                 for model, device_data in model_data.items():
-                    num_imgs_per_device = int(args.num_train_images_per_model / len(device_data))
+
+                    if classifier_type == "all_brands":
+                        num_imgs_per_device = int(num_train_imgs_per_model / len(device_data))
+                    else:
+                        num_imgs_per_device = int(args.num_train_images_per_model / len(device_data))
 
                     for device, patch_data in device_data.items():
                         random.seed(108)
@@ -212,17 +232,14 @@ def balance_splits(args, unbalanced_splits):
     return balanced_folds_data
 
 
-def run_flow(parse_args_manual):
-    args = parse_args(parse_args_manual)
-    splits = create_model_level_splits(args)
+def get_train_test_split(fold, classifier_type):
+    args = parse_args(True)
+    args.classifier_type = classifier_type
+
+    splits = create_data_splits(args)
     splits = balance_splits(args, splits)
-    return splits
-
-
-def get_train_test_split(fold):
-    splits = run_flow(parse_args_manual=True)
     return splits[fold]
 
 
 if __name__ == '__main__':
-    run_flow(parse_args_manual=False)
+    get_train_test_split(fold=0, classifier_type="all_models")

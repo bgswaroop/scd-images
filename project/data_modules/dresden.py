@@ -11,6 +11,7 @@ from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import transforms
 
+from .transforms import PerChannelMeanSubtraction
 from .utils import get_train_test_split
 
 
@@ -19,6 +20,7 @@ class DresdenNaturalImages(Dataset):
             self,
             dataset_path: Path,
             fold: int,
+            classifier_type: str,
             transform: Optional[Callable] = lambda x: x,
             train: bool = True):
 
@@ -28,6 +30,7 @@ class DresdenNaturalImages(Dataset):
         self.dataset_path = dataset_path
         self.train = train
         self.fold = fold
+        self.classifier_type = classifier_type
         self.transform = transform
 
         assert dataset_path.exists(), f'The dataset path does not exists: {dataset_path}'
@@ -45,7 +48,7 @@ class DresdenNaturalImages(Dataset):
         patch = pickle.loads(txn.get(image_key))
         x = np.frombuffer(patch[0], dtype=np.uint8).reshape((128, 128, 3))  # fixme: make it flow from inputs
         x = np.ndarray.copy(np.array(x, dtype=np.float32)) / 255.0
-        x = np.transpose(x, axes=[2, 0, 1])  # changing to channels first
+        # x = np.transpose(x, axes=[2, 0, 1])  # changing to channels first
         # std = np.frombuffer(patch[1], dtype=np.float32).reshape((1, 3))
         x = self.transform(x)
         y = self.labels[item]
@@ -70,17 +73,37 @@ class DresdenNaturalImages(Dataset):
                 temp_envs[device_path.name].close()
             raise BlockingIOError('Transactions must be opened only once')
 
-    def setup_model_level_identification(self):
-
+    def setup_brand_level_identification(self):
         if self.train:
             print('\nSetting up TRAINING DATA')
-            split = get_train_test_split(self.fold)['train']
+            split = get_train_test_split(self.fold, self.classifier_type)['train']
         else:
             print('\nSetting up TEST DATA')
-            split = get_train_test_split(self.fold)['test']
+            split = get_train_test_split(self.fold, self.classifier_type)['test']
 
         class_id = -1
         for brand_name in sorted(split):
+            class_id += 1
+            self.labels_map[class_id] = brand_name
+            for model_name in sorted(split[brand_name]):
+                for device_name in sorted(split[brand_name][model_name]):
+                    img_names = split[brand_name][model_name][device_name]
+                    self.img_keys.extend([(x.encode('ascii'), '_'.join(x.split('_')[:-2])) for x in img_names])
+                    self.labels.extend([class_id] * len(img_names))
+                    self.device_names.append(device_name)
+
+    def setup_model_level_identification(self):
+        if self.train:
+            print('\nSetting up TRAINING DATA')
+            split = get_train_test_split(self.fold, self.classifier_type)['train']
+        else:
+            print('\nSetting up TEST DATA')
+            split = get_train_test_split(self.fold, self.classifier_type)['test']
+
+        class_id = -1
+        for brand_name in sorted(split):
+            # if filter_by_brand and filter_by_brand not in brand_name:
+            #     continue
             for model_name in sorted(split[brand_name]):
                 class_id += 1
                 self.labels_map[class_id] = model_name
@@ -118,6 +141,7 @@ class DresdenDataModule(LightningDataModule):
         self.dataset_dir = args.dataset_dir
         self.batch_size = args.batch_size
         self.num_workers = args.num_processes
+        self.classifier_type = args.classifier
         self.fold = args.fold
 
         self.train_ds = None
@@ -172,23 +196,29 @@ class DresdenDataModule(LightningDataModule):
             [
                 # transforms.Resize((384, 384), transforms.InterpolationMode.BICUBIC),
                 # transforms.CenterCrop(384),
-                # transforms.ToTensor(),
+                transforms.ToTensor(),
                 # HomogeneousCropEfficient(size=384, stride=64),
                 # HomogeneousTiles(tile_size=16, img_size=384, stride=8),
                 # transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 # these values are from ImageNet
+                PerChannelMeanSubtraction()
             ]
         )
-        self.train_ds = DresdenNaturalImages(self.dataset_dir, self.fold, transform, train=True)
-        self.val_ds = DresdenNaturalImages(self.dataset_dir, self.fold, transform, train=False)
+        self.train_ds = DresdenNaturalImages(self.dataset_dir, self.fold, self.classifier_type, transform, train=True)
+        self.val_ds = DresdenNaturalImages(self.dataset_dir, self.fold, self.classifier_type, transform, train=False)
 
         # These methods cannot be part of the __init__ as the lmdb objects are not pickable
-        self.train_ds.setup_model_level_identification()
-        self.val_ds.setup_model_level_identification()
+        if self.classifier_type == "all_brands":
+            self.train_ds.setup_brand_level_identification()
+            self.val_ds.setup_brand_level_identification()
+        else:
+            self.train_ds.setup_model_level_identification()
+            self.val_ds.setup_model_level_identification()
 
         self.test_ds = self.val_ds
 
         self.num_classes = len(self.train_ds.labels_map)
+        print(self.train_ds.labels_map)
         self.num_samples = len(self.train_ds)
 
     def train_dataloader(self):

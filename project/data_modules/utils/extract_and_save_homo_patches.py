@@ -174,7 +174,7 @@ def parse_args():
     parser.add_argument('--source_dataset_dir', type=Path,
                         default=r'/data/p288722/datasets/dresden/source_devices/natural')
     parser.add_argument('--dest_dataset_dir', type=Path, default=r'/scratch/p288722/datasets/dresden_new/nat_homo')
-    parser.add_argument('--num_patches', type=int, default=400)
+    parser.add_argument('--num_patches', type=int, default=200)
     parser.add_argument('--patch_dims', type=int, default=128)
     parser.add_argument('--device_id', type=int, default=0)
 
