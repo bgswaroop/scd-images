@@ -1,3 +1,8 @@
+# Camera model identification based on forensic traces extracted from homogeneous patches
+
+This repository consists of code to reproduce the results reported in our paper. Experiments were conducted on
+the Dresden data set. Access to the published [open access paper](https://doi.org/10.1016/j.eswa.2022.117769).
+
 ## Steps to get started / re-produce the results
 ### 1. Prepare the Dataset
 - Download the Dresden dataset - https://dl.acm.org/doi/10.1145/1774088.1774427
@@ -39,3 +44,16 @@
 ### 2. Train the models
 - Create a brand-level classifier
   -  
+  
+### Citation
+
+```
+@article{bennabhaktula2022camera,
+  title={Camera model identification based on forensic traces extracted from homogeneous patches},
+  author={Bennabhaktula, Guru Swaroop and Alegre, Enrique and Karastoyanova, Dimka and Azzopardi, George},
+  journal={Expert Systems with Applications},
+  pages={117769},
+  year={2022},
+  publisher={Elsevier}
+}
+```   
