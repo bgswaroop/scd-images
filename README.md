@@ -41,9 +41,10 @@ the Dresden data set. Access to the published [open access paper](https://doi.or
   - project/data_modules/utils/train_test_split.py
   - No need to run this file manually, will be automatically called during execution train/test
 
-### 2. Train the models
-- Create a brand-level classifier
-  -  
+
+#### Documentation is in progress - will be updated soon
+
+
   
 ### Citation
 
