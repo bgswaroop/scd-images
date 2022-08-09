@@ -1,6 +1,6 @@
 # Camera model identification based on forensic traces extracted from homogeneous patches
 
-### Note: The code from the pytorch-lightning branch will replace the code in this branch. Simplifying training + eveluation flow for easy replication of results with additional documentation. 
+### Note: The code from the [pytorch-lightning](https://github.com/bgswaroop/scd-images/tree/pytorch-lightning) branch will replace the code in this branch. Simplifying training + eveluation flow for easy replication of results with additional documentation. 
 
 This repository consists of code to reproduce the results reported in our paper. Experiments were conducted on
 the Dresden data set. Access to the published [open access paper](https://doi.org/10.1016/j.eswa.2022.117769).
