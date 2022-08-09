@@ -13,12 +13,14 @@ from torchvision.transforms import transforms
 
 from .transforms import PerChannelMeanSubtraction
 from .utils import get_train_test_split
+from line_profiler_pycharm import profile
 
 
 class DresdenNaturalImages(Dataset):
     def __init__(
             self,
-            dataset_path: Path,
+            full_image_dataset_dir: Path,
+            patches_dataset_dir: Path,
             fold: int,
             classifier_type: str,
             transform: Optional[Callable] = lambda x: x,
@@ -27,17 +29,19 @@ class DresdenNaturalImages(Dataset):
         self.labels_map = OrderedDict()
         self.img_keys, self.labels = [], []
         self.device_names = []
-        self.dataset_path = dataset_path
+        self.patches_dataset_dir = patches_dataset_dir
+        self.full_image_dataset_dir = full_image_dataset_dir
         self.train = train
         self.fold = fold
         self.classifier_type = classifier_type
         self.transform = transform
 
-        assert dataset_path.exists(), f'The dataset path does not exists: {dataset_path}'
+        assert patches_dataset_dir.exists(), f'The dataset path does not exists: {patches_dataset_dir}'
 
     def __len__(self):
         return len(self.img_keys)
 
+    @profile
     def __getitem__(self, item):
         image_key, device_name = self.img_keys[item]
         if not hasattr(self, 'txns'):
@@ -47,7 +51,8 @@ class DresdenNaturalImages(Dataset):
         # with env.begin() as txn:
         patch = pickle.loads(txn.get(image_key))
         x = np.frombuffer(patch[0], dtype=np.uint8).reshape((128, 128, 3))  # fixme: make it flow from inputs
-        x = np.ndarray.copy(np.array(x, dtype=np.float32)) / 255.0
+        # x = np.ndarray.copy(np.array(x, dtype=np.float32)) / 255.0
+        x = x.astype(np.float32, copy=False) / 255.0
         # x = np.transpose(x, axes=[2, 0, 1])  # changing to channels first
         # std = np.frombuffer(patch[1], dtype=np.float32).reshape((1, 3))
         x = self.transform(x)
@@ -58,7 +63,7 @@ class DresdenNaturalImages(Dataset):
         # Open the relevant lmdb file pointers
         temp_txns = {}
         temp_envs = {}
-        device_paths = self.dataset_path.glob('*')
+        device_paths = self.patches_dataset_dir.glob('*')
         # device_paths = [x for x in device_paths if x.name in self.device_names]
         for device_path in device_paths:
             env = lmdb.open(str(device_path), readonly=True, lock=False)
@@ -76,10 +81,10 @@ class DresdenNaturalImages(Dataset):
     def setup_brand_level_identification(self):
         if self.train:
             print('\nSetting up TRAINING DATA')
-            split = get_train_test_split(self.fold, self.classifier_type)['train']
+            split = get_train_test_split(self.full_image_dataset_dir, self.fold, self.classifier_type)['train']
         else:
             print('\nSetting up TEST DATA')
-            split = get_train_test_split(self.fold, self.classifier_type)['test']
+            split = get_train_test_split(self.full_image_dataset_dir, self.fold, self.classifier_type)['test']
 
         class_id = -1
         for brand_name in sorted(split):
@@ -95,10 +100,10 @@ class DresdenNaturalImages(Dataset):
     def setup_model_level_identification(self):
         if self.train:
             print('\nSetting up TRAINING DATA')
-            split = get_train_test_split(self.fold, self.classifier_type)['train']
+            split = get_train_test_split(self.full_image_dataset_dir, self.fold, self.classifier_type)['train']
         else:
             print('\nSetting up TEST DATA')
-            split = get_train_test_split(self.fold, self.classifier_type)['test']
+            split = get_train_test_split(self.full_image_dataset_dir, self.fold, self.classifier_type)['test']
 
         class_id = -1
         for brand_name in sorted(split):
@@ -131,14 +136,16 @@ class DresdenNaturalImages(Dataset):
                     self.labels_map[class_id] = device_name
 
                     img_names = split[brand_name][model_name][device_name]
-                    self.img_keys.extend([self.dataset_path.joinpath(f'{device_name}/{x}') for x in img_names])
+                    self.img_keys.extend([self.patches_dataset_dir.joinpath(f'{device_name}/{x}') for x in img_names])
                     self.labels.extend([class_id] * len(img_names))
 
 
 class DresdenDataModule(LightningDataModule):
     def __init__(self, args):
         super().__init__()
-        self.dataset_dir = args.dataset_dir
+        self.patches_dataset_dir = args.patches_dataset_dir
+        self.full_image_dataset_dir = args.full_image_dataset_dir
+        self.source_dataset_dir = None
         self.batch_size = args.batch_size
         self.num_workers = args.num_processes
         self.classifier_type = args.classifier
@@ -194,18 +201,14 @@ class DresdenDataModule(LightningDataModule):
         # called on every GPU
         transform = transforms.Compose(
             [
-                # transforms.Resize((384, 384), transforms.InterpolationMode.BICUBIC),
-                # transforms.CenterCrop(384),
                 transforms.ToTensor(),
-                # HomogeneousCropEfficient(size=384, stride=64),
-                # HomogeneousTiles(tile_size=16, img_size=384, stride=8),
-                # transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                # these values are from ImageNet
                 PerChannelMeanSubtraction()
             ]
         )
-        self.train_ds = DresdenNaturalImages(self.dataset_dir, self.fold, self.classifier_type, transform, train=True)
-        self.val_ds = DresdenNaturalImages(self.dataset_dir, self.fold, self.classifier_type, transform, train=False)
+        self.train_ds = DresdenNaturalImages(self.full_image_dataset_dir, self.patches_dataset_dir,
+                                             self.fold, self.classifier_type, transform, train=True)
+        self.val_ds = DresdenNaturalImages(self.full_image_dataset_dir, self.patches_dataset_dir,
+                                           self.fold, self.classifier_type, transform, train=False)
 
         # These methods cannot be part of the __init__ as the lmdb objects are not pickable
         if self.classifier_type == "all_brands":
@@ -215,20 +218,23 @@ class DresdenDataModule(LightningDataModule):
             self.train_ds.setup_model_level_identification()
             self.val_ds.setup_model_level_identification()
 
-        self.test_ds = self.val_ds
+        self.test_ds = self.val_ds  # as we are performing cross validation (due to limited size of the dataset)
 
         self.num_classes = len(self.train_ds.labels_map)
         print(self.train_ds.labels_map)
         self.num_samples = len(self.train_ds)
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True)
+        return DataLoader(self.train_ds, self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True,
+                          persistent_workers=True, prefetch_factor=10)
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds, self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True)
+        return DataLoader(self.val_ds, self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True,
+                          persistent_workers=True, prefetch_factor=10)
 
     def test_dataloader(self):
-        return DataLoader(self.test_ds, self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True)
+        return DataLoader(self.test_ds, self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True,
+                          persistent_workers=True, prefetch_factor=10)
 
     def predict_dataloader(self) -> EVAL_DATALOADERS:
         raise NotImplementedError("`predict_dataloader` must be implemented to be used with the Lightning Trainer")

@@ -34,7 +34,7 @@
 - Create Train / Test splits 
   - Adjust the parameters to suit the splits. The default parameters correspond to the ones used in the paper.
   - project/data_modules/utils/train_test_split.py
-  - No need to run this file manually, will be automatically called during train/test
+  - No need to run this file manually, will be automatically called during execution train/test
 
 ### 2. Train the models
 - Create a brand-level classifier
