@@ -7,7 +7,7 @@ the Dresden data set. Access to the published [open access paper](https://doi.or
 
 ## Steps to get started / re-produce the results
 ### 1. Prepare the Dataset
-- Download the Dresden dataset - https://dl.acm.org/doi/10.1145/1774088.1774427
+- Download the Dresden dataset from the official website - https://dl.acm.org/doi/10.1145/1774088.1774427 (in case the link to the dataset download is not working, check the alternate resource here https://github.com/bgswaroop/scd-images/issues/1#issuecomment-1711647633)
 - Restructure the data as shown below:
 
   - Retain the image file names and the names of the device directories as specified in the downloaded dataset.
